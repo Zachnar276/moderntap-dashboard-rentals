@@ -200,6 +200,21 @@
     var device = /iPad|Tablet/i.test(ua) || (/Android/i.test(ua) && !/Mobile/i.test(ua)) ? 'tablet'
                : /Mobi|iPhone|Android/i.test(ua) ? 'phone' : 'desktop';
 
+    // Anonymous random ID kept on this phone, so repeat taps within a short window count once.
+    // It is never stored in the Sheet and says nothing about who the guest is.
+    var visitor = (function () {
+      try {
+        var v = localStorage.getItem('mt_v');
+        if (!/^[a-z0-9]{8,32}$/.test(v || '')) {
+          var a = new Uint8Array(12);
+          crypto.getRandomValues(a);
+          v = Array.prototype.map.call(a, function (b) { return (b % 36).toString(36); }).join('');
+          localStorage.setItem('mt_v', v);
+        }
+        return v;
+      } catch (e) { return ''; }
+    })();
+
     // /t/CHIP_ID (from a plaque) or /h/PROPERTY_ID (direct link)
     var path = location.pathname;
     var q = new URLSearchParams(location.search);
@@ -217,7 +232,7 @@
     function logClick(type) {
       if (!house) return;
       var url = cfg.API_URL + '?action=click&property=' + encodeURIComponent(house.property.id) +
-        '&type=' + encodeURIComponent(type) + '&d=' + device +
+        '&type=' + encodeURIComponent(type) + '&d=' + device + '&v=' + visitor +
         (house.chip ? '&chip=' + encodeURIComponent(house.chip) : '');
       try { fetch(url, { keepalive: true, mode: 'no-cors' }); } catch (e) { /* never block the guest */ }
     }
@@ -296,7 +311,7 @@
 
     if (!chipId && !propertyId) { fail('This plaque isn’t set up yet.'); return; }
 
-    var api = cfg.API_URL + '?action=house&d=' + device +
+    var api = cfg.API_URL + '?action=house&d=' + device + '&v=' + visitor +
       (chipId ? '&chip=' + encodeURIComponent(chipId) : '&property=' + encodeURIComponent(propertyId));
 
     fetch(api)

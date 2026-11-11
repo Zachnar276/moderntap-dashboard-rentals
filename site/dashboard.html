@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Your houses · ModernTap</title>
+  <link rel="stylesheet" href="/css/dash.css">
+  <style>main { max-width: 1040px; }</style>
+</head>
+<body>
+  <main>
+    <div class="topbar">
+      <div class="brand">ModernTap</div>
+      <div class="who"><span id="who"></span> · <button class="linkbtn" id="signout" type="button">Sign out</button></div>
+    </div>
+    <h1 id="title">Your houses</h1>
+
+    <div class="filters" role="group" aria-label="Date range">
+      <button type="button" data-days="7">7 days</button>
+      <button type="button" data-days="30">30 days</button>
+      <button type="button" data-days="90">90 days</button>
+    </div>
+
+    <p id="status" class="status">Loading…</p>
+
+    <div id="content" class="content hidden">
+      <section class="card hero">
+        <div class="label">Rebooking taps, all houses</div>
+        <div class="value" id="rebook-value">–</div>
+        <div class="delta" id="rebook-delta"></div>
+      </section>
+
+      <div class="tiles three">
+        <section class="card tile">
+          <div class="label">Potential rebooks (clicks)</div>
+          <div class="value" id="clicks-value">–</div>
+          <div class="delta" id="clicks-delta"></div>
+          <div class="hint">Guests who pressed “Choose your dates”</div>
+        </section>
+        <section class="card tile">
+          <div class="label">Total taps</div>
+          <div class="value" id="total-value">–</div>
+          <div class="delta" id="total-delta"></div>
+        </section>
+        <section class="card tile">
+          <div class="label">Houses</div>
+          <div class="value" id="house-count">–</div>
+        </section>
+      </div>
+
+      <div class="sort-row">
+        <h2>Houses</h2>
+        <label>Sort by
+          <select id="sort">
+            <option value="rebookTaps">Rebooking taps</option>
+            <option value="rebookClicks">Potential rebooks</option>
+            <option value="totalTaps">Total taps</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
+      </div>
+      <div class="houses" id="houses"></div>
+    </div>
+  </main>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+  (function () {
+    if (!MTAuth.requireSignIn()) return;
+
+    var params = new URLSearchParams(location.search);
+    var days = [7, 30, 90].indexOf(Number(params.get('days'))) >= 0 ? Number(params.get('days')) : 30;
+    var current = null;
+    var SVG_NS = 'http://www.w3.org/2000/svg';
+
+    function $(id) { return document.getElementById(id); }
+    function fmt(n) { return Number(n).toLocaleString('en-US'); }
+    function el(tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    }
+
+    function renderDelta(node, now, prev, short) {
+      node.textContent = '';
+      if (prev == null) return;
+      var period = short ? '' : ' vs previous ' + days + ' days';
+      if (prev === 0) { node.textContent = now === 0 ? 'No change' + period : 'New this period'; return; }
+      var pct = Math.round(((now - prev) / prev) * 100);
+      if (pct === 0) { node.textContent = 'No change' + period; return; }
+      node.appendChild(el('span', pct > 0 ? 'up' : 'down', (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct) + '%'));
+      node.appendChild(document.createTextNode(period));
+    }
+
+    // Tiny trend line of daily taps (single series, so no legend; the card says what it is).
+    function sparkline(values) {
+      var W = 300, H = 36, pad = 3;
+      var max = Math.max.apply(null, values.concat([1]));
+      var step = values.length > 1 ? (W - pad * 2) / (values.length - 1) : 0;
+      var pts = values.map(function (v, i) {
+        return [pad + i * step, H - pad - (v / max) * (H - pad * 2)];
+      });
+      var svg = document.createElementNS(SVG_NS, 'svg');
+      svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+      svg.setAttribute('preserveAspectRatio', 'none');
+      svg.setAttribute('aria-hidden', 'true');
+      var area = document.createElementNS(SVG_NS, 'path');
+      area.setAttribute('d', 'M' + pts.map(function (p) { return p.join(','); }).join('L') +
+        'L' + (W - pad) + ',' + (H - pad) + 'L' + pad + ',' + (H - pad) + 'Z');
+      area.setAttribute('fill', 'var(--series-rebook)');
+      area.setAttribute('opacity', '0.1');
+      var line = document.createElementNS(SVG_NS, 'path');
+      line.setAttribute('d', 'M' + pts.map(function (p) { return p.join(','); }).join('L'));
+      line.setAttribute('fill', 'none');
+      line.setAttribute('stroke', 'var(--series-rebook)');
+      line.setAttribute('stroke-width', '2');
+      line.setAttribute('stroke-linejoin', 'round');
+      line.setAttribute('vector-effect', 'non-scaling-stroke');
+      svg.appendChild(area);
+      svg.appendChild(line);
+      return svg;
+    }
+
+    function renderHouses() {
+      var key = $('sort').value;
+      var list = current.houses.slice().sort(function (a, b) {
+        if (key === 'name') return String(a.name).localeCompare(String(b.name));
+        return b[key] - a[key] || String(a.name).localeCompare(String(b.name));
+      });
+      var wrap = $('houses');
+      wrap.textContent = '';
+      if (!list.length) {
+        wrap.appendChild(el('p', 'sub', 'No houses are linked to your account yet.'));
+        return;
+      }
+      list.forEach(function (h) {
+        var a = el('a', 'house');
+        a.href = '/property.html?p=' + encodeURIComponent(h.id) + '&days=' + days;
+        a.appendChild(el('div', 'name', h.name));
+        a.appendChild(el('div', 'tag', h.tagline || ' '));
+        var nums = el('div', 'nums');
+        function num(value, label, lead, now, prev) {
+          var n = el('div', 'num' + (lead ? ' lead' : ''));
+          n.appendChild(el('div', 'v', fmt(value)));
+          n.appendChild(el('div', 'l', label));
+          if (prev != null) { var d = el('div', 'delta'); renderDelta(d, now, prev, true); n.appendChild(d); }
+          nums.appendChild(n);
+        }
+        num(h.rebookTaps, 'Rebooking taps', true, h.rebookTaps, h.prevRebookTaps);
+        num(h.rebookClicks, 'Potential rebooks', false, h.rebookClicks, h.prevRebookClicks);
+        num(h.totalTaps, 'Total taps', false);
+        a.appendChild(nums);
+        var sp = el('div', 'spark');
+        sp.appendChild(sparkline(h.daily));
+        sp.setAttribute('title', 'Daily taps, last ' + days + ' days');
+        a.appendChild(sp);
+        a.setAttribute('aria-label', h.name + ': ' + h.rebookTaps + ' rebooking taps, ' +
+          h.rebookClicks + ' potential rebooks, ' + h.totalTaps + ' total taps');
+        wrap.appendChild(a);
+      });
+    }
+
+    function render(data) {
+      current = data;
+      var u = data.user;
+      $('who').textContent = '';
+      $('who').appendChild(el('b', null, u.name || u.email));
+      $('who').appendChild(el('span', 'role-pill', u.role));
+      $('title').textContent = u.role === 'owner' ? 'Your houses' : 'All houses';
+      var t = data.totals;
+      $('rebook-value').textContent = fmt(t.rebookTaps);
+      renderDelta($('rebook-delta'), t.rebookTaps, t.prevRebookTaps);
+      $('clicks-value').textContent = fmt(t.rebookClicks);
+      renderDelta($('clicks-delta'), t.rebookClicks, t.prevRebookClicks);
+      $('total-value').textContent = fmt(t.totalTaps);
+      renderDelta($('total-delta'), t.totalTaps, t.prevTotalTaps);
+      $('house-count').textContent = fmt(data.houses.length);
+      $('status').classList.add('hidden');
+      $('content').classList.remove('hidden');
+      renderHouses();
+    }
+
+    function load() {
+      document.querySelectorAll('.filters button').forEach(function (b) {
+        b.setAttribute('aria-pressed', String(Number(b.dataset.days) === days));
+      });
+      document.body.classList.add('loading');
+      MTAuth.api('overview', { days: days })
+        .then(function (data) {
+          if (!data.ok) throw new Error(data.error || 'Could not load');
+          render(data);
+        })
+        .catch(function (err) {
+          if (!current) { $('status').textContent = 'Couldn’t load your houses: ' + err.message; $('status').classList.add('error'); }
+        })
+        .then(function () { document.body.classList.remove('loading'); });
+    }
+
+    document.querySelectorAll('.filters button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        days = Number(b.dataset.days);
+        params.set('days', days);
+        history.replaceState(null, '', '?' + params.toString());
+        load();
+      });
+    });
+    $('sort').addEventListener('change', function () { if (current) renderHouses(); });
+    $('signout').addEventListener('click', MTAuth.signOut);
+
+    load();
+  })();
+  </script>
+</body>
+</html>

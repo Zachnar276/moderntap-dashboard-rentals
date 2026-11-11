@@ -3,14 +3,8 @@
  *
  *   - setup()          creates any missing tabs (and test data in an empty Sheet)
  *   - clearTestTaps()  removes the fake test taps (device = "test")
- *   - doGet()          the web app API:
- *       ?action=ping
- *       ?action=house&chip=CHIP_ID&d=phone      guest tapped a chip: logs the tap, returns the house page
- *       ?action=house&property=PROPERTY_ID      house page opened directly (no tap logged)
- *       ?action=click&property=ID&type=rebook&chip=CHIP_ID&d=phone   guest clicked a link on the house page
- *       ?action=stats&property=PROPERTY_ID&days=30
- *
- * NOTE: "stats" has no login check yet. Sign in with Google is the next step.
+ *   - doGet()          public actions used by guests' phones (house page, clicks)
+ *   - doPost()         signed-in actions used by the dashboard (Sign in with Google)
  */
 
 const TABS = {
@@ -19,7 +13,7 @@ const TABS = {
   Links: ['property_id', 'link_type', 'label', 'url', 'details', 'placeholder', 'sort'],
   Taps: ['timestamp', 'chip_id', 'property_id', 'link_type', 'device'],
   Clicks: ['timestamp', 'property_id', 'link_type', 'chip_id', 'device'],
-  Users: ['user_id', 'name', 'email', 'role', 'property_ids', 'access_code'],
+  Users: ['user_id', 'name', 'email', 'role', 'property_ids'],
   Bookings: ['booking_id', 'property_id', 'booked_date', 'stay_start', 'source'],
 };
 
@@ -71,7 +65,7 @@ function addTestData_(ss) {
   ];
   ss.getSheetByName('Links').getRange(2, 1, links.length, links[0].length).setValues(links);
 
-  ss.getSheetByName('Users').appendRow(['u-admin', 'Admin', 'you@example.com', 'admin', '', '']);
+  ss.getSheetByName('Users').appendRow(['u-admin', 'Admin', 'you@example.com', 'admin', '']);
 
   // ~60 days of fake taps so the dashboard has something to show. Marked device = "test".
   const rows = [];
@@ -102,6 +96,13 @@ function clearTestTaps() {
 
 /* ───────────────────────── Web app ───────────────────────── */
 
+/**
+ * Public actions (guests' phones): GET.
+ *   ?action=ping
+ *   ?action=house&chip=CHIP_ID&d=phone&v=VISITOR    guest tapped a plaque: logs the tap, returns the house page
+ *   ?action=house&property=PROPERTY_ID              house page opened directly (no tap logged)
+ *   ?action=click&property=ID&type=rebook&chip=CHIP_ID&d=phone&v=VISITOR
+ */
 function doGet(e) {
   const p = (e && e.parameter) || {};
   try {
@@ -109,11 +110,9 @@ function doGet(e) {
       case 'ping':
         return json_({ ok: true, time: new Date().toISOString() });
       case 'house':
-        return json_(getHouse_(p.chip, p.property, p.d));
+        return json_(getHouse_(p.chip, p.property, p.d, p.v));
       case 'click':
-        return json_(logClick_(p.property, p.type, p.chip, p.d));
-      case 'stats':
-        return json_(getStats_(p.property, Number(p.days) || 30));
+        return json_(logClick_(p.property, p.type, p.chip, p.d, p.v));
       default:
         return json_({ ok: false, error: 'Unknown action' });
     }
@@ -122,9 +121,119 @@ function doGet(e) {
   }
 }
 
+/**
+ * Signed-in actions (dashboard): POST with a JSON body { action, token, ... }.
+ * The token is a Google ID token from Sign in with Google. It is sent in the body,
+ * not the address, so it never shows up in logs or browser history.
+ *   { action: 'me' }
+ *   { action: 'overview', days: 30 }
+ *   { action: 'stats', property: 'ocd-001', days: 30 }
+ */
+function doPost(e) {
+  try {
+    const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    const user = verifyUser_(body.token);
+    if (!user.ok) return json_(user);
+
+    const days = clampDays_(body.days);
+    switch (body.action) {
+      case 'me':
+        return json_({ ok: true, user: publicUser_(user) });
+      case 'overview':
+        return json_(getOverview_(user, days));
+      case 'stats':
+        if (user.propertyIds.indexOf(String(body.property)) < 0) {
+          return json_({ ok: false, error: 'no_access' });
+        }
+        return json_(getStats_(String(body.property), days));
+      default:
+        return json_({ ok: false, error: 'Unknown action' });
+    }
+  } catch (err) {
+    return json_({ ok: false, error: errText_(err) });
+  }
+}
+
+/* ───────────────────────── Sign in with Google ───────────────────────── */
+
+const GOOGLE_CLIENT_ID = '738140668443-le3dhuc3ujmg9r51rmd6j2djlsgfei50.apps.googleusercontent.com';
+const ROLES = ['admin', 'manager', 'owner'];
+
+/**
+ * Checks a Google ID token with Google, then looks the email up in the Users tab.
+ * Returns { ok, email, name, role, propertyIds } or { ok: false, error }.
+ */
+function verifyUser_(token) {
+  if (!token || typeof token !== 'string' || token.length > 4096) {
+    return { ok: false, error: 'signed_out' };
+  }
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'tok:' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token));
+  let identity = null;
+  const cached = cache.get(cacheKey);
+
+  if (cached) {
+    identity = JSON.parse(cached);
+  } else {
+    const res = UrlFetchApp.fetch(
+      'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(token),
+      { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) return { ok: false, error: 'signed_out' };
+    const info = JSON.parse(res.getContentText());
+    const issuerOk = info.iss === 'accounts.google.com' || info.iss === 'https://accounts.google.com';
+    const expiresMs = Number(info.exp) * 1000;
+    if (info.aud !== GOOGLE_CLIENT_ID || !issuerOk ||
+        String(info.email_verified) !== 'true' || !(expiresMs > Date.now())) {
+      return { ok: false, error: 'signed_out' };
+    }
+    identity = { email: String(info.email).toLowerCase(), name: info.name || '' };
+    // Cache until the token expires (max 10 minutes).
+    const ttl = Math.min(600, Math.floor((expiresMs - Date.now()) / 1000));
+    if (ttl > 30) cache.put(cacheKey, JSON.stringify(identity), ttl);
+  }
+
+  const row = readTable_('Users').filter(function (u) {
+    return String(u.email).trim().toLowerCase() === identity.email;
+  })[0];
+  const role = row ? String(row.role).trim().toLowerCase() : '';
+  if (!row || ROLES.indexOf(role) < 0) {
+    return { ok: false, error: 'not_authorized', email: identity.email };
+  }
+
+  const activeIds = readTable_('Properties')
+    .filter(function (p) { return isTrue_(p.active); })
+    .map(function (p) { return String(p.property_id); });
+
+  const propertyIds = role === 'admin'
+    ? activeIds
+    : String(row.property_ids || '').split(/[,\s]+/)
+        .map(function (s) { return s.trim(); })
+        .filter(function (id) { return id && activeIds.indexOf(id) >= 0; });
+
+  return { ok: true, email: identity.email, name: row.name || identity.name, role: role, propertyIds: propertyIds };
+}
+
+function publicUser_(user) {
+  return { email: user.email, name: user.name, role: user.role, propertyCount: user.propertyIds.length };
+}
+
 /* ───────────────────────── Guest house page ───────────────────────── */
 
-function getHouse_(chipId, propertyId, device) {
+const VISITOR_RE = /^[a-z0-9]{8,32}$/;
+const REPEAT_TAP_SECONDS = 1800;   // same phone + same plaque within 30 min counts once
+const REPEAT_CLICK_SECONDS = 600;  // same phone + same link within 10 min counts once
+
+/** True the first time this key is seen in the window; false for repeats. */
+function firstInWindow_(key, seconds) {
+  const cache = CacheService.getScriptCache();
+  if (cache.get(key)) return false;
+  cache.put(key, '1', seconds);
+  return true;
+}
+
+function getHouse_(chipId, propertyId, device, visitor) {
   let pid = String(propertyId || '').trim();
   let chip = null;
 
@@ -142,10 +251,14 @@ function getHouse_(chipId, propertyId, device) {
   })[0];
   if (!property) return { ok: false, error: 'Property not found' };
 
-  // A tap is logged only when the page was opened from a chip.
+  // A tap is logged only when the page was opened from a plaque, and repeats are skipped.
   let logged = null;
   if (chip) {
-    logged = appendRow_('Taps', [new Date(), chip.chip_id, pid, chip.link_type, cleanDevice_(device)]);
+    const v = VISITOR_RE.test(visitor || '') ? visitor : '';
+    const fresh = !v || firstInWindow_('tap:' + chip.chip_id + ':' + v, REPEAT_TAP_SECONDS);
+    logged = fresh
+      ? appendRow_('Taps', [new Date(), chip.chip_id, pid, chip.link_type, cleanDevice_(device)])
+      : 'repeat';
   }
 
   const links = readTable_('Links')
@@ -172,11 +285,15 @@ function getHouse_(chipId, propertyId, device) {
   };
 }
 
-function logClick_(propertyId, linkType, chipId, device) {
+function logClick_(propertyId, linkType, chipId, device, visitor) {
   const pid = String(propertyId || '').trim();
   const exists = readTable_('Properties').some(function (p) { return String(p.property_id) === pid; });
   if (!exists) return { ok: false, error: 'Property not found' };
   const type = LINK_TYPES.indexOf(linkType) >= 0 ? linkType : 'other';
+  const v = VISITOR_RE.test(visitor || '') ? visitor : '';
+  if (v && !firstInWindow_('click:' + pid + ':' + type + ':' + v, REPEAT_CLICK_SECONDS)) {
+    return { ok: true, logged: 'repeat' };
+  }
   const ok = appendRow_('Clicks', [new Date(), pid, type, String(chipId || '').slice(0, 64), cleanDevice_(device)]);
   return { ok: ok };
 }
@@ -204,83 +321,131 @@ function cleanDevice_(d) {
 
 /* ───────────────────────── Stats ───────────────────────── */
 
-function getStats_(propertyId, days) {
-  const pid = String(propertyId || '').trim();
+function clampDays_(d) {
+  return Math.min(Math.max(Math.round(Number(d) || 30), 1), 365);
+}
+
+/**
+ * One pass over Taps and Clicks for a set of houses.
+ * Returns { tz, days, dayList, byProperty: { id: summary } }.
+ * "This period" = the last `days` calendar days including today; "previous" = the `days` before that.
+ */
+function summarize_(propertyIds, days) {
+  const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  const now = new Date();
+  function dayKey(d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); }
+
+  const dayList = [];
+  const period = {};
+  const prev = {};
+  for (let i = days * 2 - 1; i >= 0; i--) {
+    const key = dayKey(new Date(now.getTime() - i * 86400000));
+    if (i < days) { period[key] = true; dayList.push(key); } else { prev[key] = true; }
+  }
+
+  const byProperty = {};
+  propertyIds.forEach(function (id) {
+    const byDay = {};
+    dayList.forEach(function (d) { byDay[d] = { taps: 0, rebook: 0 }; });
+    const byType = {};
+    const clicksByType = {};
+    LINK_TYPES.forEach(function (t) { byType[t] = 0; clicksByType[t] = 0; });
+    byProperty[id] = {
+      totalTaps: 0, rebookTaps: 0, prevTotalTaps: 0, prevRebookTaps: 0,
+      rebookClicks: 0, prevRebookClicks: 0,
+      byType: byType, clicksByType: clicksByType, byDay: byDay, byChip: {},
+    };
+  });
+
+  readTable_('Taps').forEach(function (t) {
+    const s = byProperty[String(t.property_id)];
+    if (!s || !(t.timestamp instanceof Date)) return;
+    const day = dayKey(t.timestamp);
+    const type = LINK_TYPES.indexOf(t.link_type) >= 0 ? t.link_type : 'other';
+    if (period[day]) {
+      s.totalTaps++;
+      s.byType[type]++;
+      s.byDay[day].taps++;
+      if (type === 'rebook') { s.rebookTaps++; s.byDay[day].rebook++; }
+      s.byChip[t.chip_id] = (s.byChip[t.chip_id] || 0) + 1;
+    } else if (prev[day]) {
+      s.prevTotalTaps++;
+      if (type === 'rebook') s.prevRebookTaps++;
+    }
+  });
+
+  readTable_('Clicks').forEach(function (c) {
+    const s = byProperty[String(c.property_id)];
+    if (!s || !(c.timestamp instanceof Date)) return;
+    const day = dayKey(c.timestamp);
+    const type = LINK_TYPES.indexOf(c.link_type) >= 0 ? c.link_type : 'other';
+    if (period[day]) {
+      s.clicksByType[type]++;
+      if (type === 'rebook') s.rebookClicks++;
+    } else if (prev[day] && type === 'rebook') {
+      s.prevRebookClicks++;
+    }
+  });
+
+  return { days: days, dayList: dayList, byProperty: byProperty };
+}
+
+function getStats_(pid, days) {
   const property = readTable_('Properties').filter(function (p) {
     return String(p.property_id) === pid;
   })[0];
   if (!property) return { ok: false, error: 'Property not found' };
 
-  days = Math.min(Math.max(Math.round(days), 1), 365);
-  const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
-  const now = new Date();
-  function dayKey(d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); }
-
-  // Whole calendar days: this period = the last `days` days including today;
-  // previous period = the `days` days before that.
-  const periodDays = {};
-  const prevDays = {};
-  for (let i = 0; i < days * 2; i++) {
-    const key = dayKey(new Date(now.getTime() - i * 86400000));
-    if (i < days) periodDays[key] = true; else prevDays[key] = true;
-  }
-
+  const s = summarize_([pid], days).byProperty[pid];
   const chips = readTable_('Chips').filter(function (c) { return String(c.property_id) === pid; });
-  const taps = [];
-  const prevTaps = [];
-  readTable_('Taps').forEach(function (t) {
-    if (String(t.property_id) !== pid || !(t.timestamp instanceof Date)) return;
-    t.day = dayKey(t.timestamp);
-    if (periodDays[t.day]) taps.push(t);
-    else if (prevDays[t.day]) prevTaps.push(t);
-  });
-  const prevRebook = prevTaps.filter(function (t) { return t.link_type === 'rebook'; }).length;
-
-  // Clicks on links from the guest house page, this period.
-  const clicksByType = {};
-  LINK_TYPES.forEach(function (t) { clicksByType[t] = 0; });
-  readTable_('Clicks').forEach(function (c) {
-    if (String(c.property_id) !== pid || !(c.timestamp instanceof Date)) return;
-    if (!periodDays[dayKey(c.timestamp)]) return;
-    clicksByType[LINK_TYPES.indexOf(c.link_type) >= 0 ? c.link_type : 'other']++;
-  });
-
-  const byType = {};
-  LINK_TYPES.forEach(function (t) { byType[t] = 0; });
-
-  const byChip = {};
-  chips.forEach(function (c) {
-    byChip[c.chip_id] = { chip_id: c.chip_id, spot: c.spot, link_type: c.link_type, taps: 0 };
-  });
-
-  const byDay = {};
-  for (let i = days - 1; i >= 0; i--) {
-    byDay[dayKey(new Date(now.getTime() - i * 86400000))] = { taps: 0, rebook: 0 };
-  }
-
-  taps.forEach(function (t) {
-    const type = LINK_TYPES.indexOf(t.link_type) >= 0 ? t.link_type : 'other';
-    byType[type]++;
-    if (byChip[t.chip_id]) byChip[t.chip_id].taps++;
-    byDay[t.day].taps++;
-    if (type === 'rebook') byDay[t.day].rebook++;
-  });
 
   return {
     ok: true,
     property: { id: pid, name: property.name },
     days: days,
-    totalTaps: taps.length,
-    rebookTaps: byType.rebook,
-    clicksByType: clicksByType,
-    prevTotalTaps: prevTaps.length,
-    prevRebookTaps: prevRebook,
-    byType: byType,
-    byChip: Object.keys(byChip).map(function (k) { return byChip[k]; }),
-    byDay: Object.keys(byDay).map(function (d) {
-      return { date: d, taps: byDay[d].taps, rebook: byDay[d].rebook };
+    totalTaps: s.totalTaps,
+    rebookTaps: s.rebookTaps,
+    prevTotalTaps: s.prevTotalTaps,
+    prevRebookTaps: s.prevRebookTaps,
+    rebookClicks: s.rebookClicks,
+    prevRebookClicks: s.prevRebookClicks,
+    byType: s.byType,
+    clicksByType: s.clicksByType,
+    byChip: chips.map(function (c) {
+      return { chip_id: c.chip_id, spot: c.spot, link_type: c.link_type, taps: s.byChip[c.chip_id] || 0 };
+    }),
+    byDay: Object.keys(s.byDay).map(function (d) {
+      return { date: d, taps: s.byDay[d].taps, rebook: s.byDay[d].rebook };
     }),
   };
+}
+
+function getOverview_(user, days) {
+  const props = readTable_('Properties').filter(function (p) {
+    return user.propertyIds.indexOf(String(p.property_id)) >= 0;
+  });
+  const ids = props.map(function (p) { return String(p.property_id); });
+  const sum = summarize_(ids, days);
+
+  const totals = { totalTaps: 0, rebookTaps: 0, prevTotalTaps: 0, prevRebookTaps: 0, rebookClicks: 0, prevRebookClicks: 0 };
+  const houses = props.map(function (p) {
+    const id = String(p.property_id);
+    const s = sum.byProperty[id];
+    Object.keys(totals).forEach(function (k) { totals[k] += s[k]; });
+    return {
+      id: id,
+      name: p.name,
+      tagline: p.tagline || '',
+      totalTaps: s.totalTaps,
+      rebookTaps: s.rebookTaps,
+      prevRebookTaps: s.prevRebookTaps,
+      rebookClicks: s.rebookClicks,
+      prevRebookClicks: s.prevRebookClicks,
+      daily: sum.dayList.map(function (d) { return s.byDay[d].taps; }),
+    };
+  });
+
+  return { ok: true, user: publicUser_(user), days: days, totals: totals, houses: houses };
 }
 
 /* ───────────────────────── Helpers ───────────────────────── */

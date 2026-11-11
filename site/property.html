@@ -5,120 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Property stats · ModernTap</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --page: #f9f9f7;
-      --surface: #fcfcfb;
-      --text-primary: #0b0b0b;
-      --text-secondary: #52514e;
-      --text-muted: #898781;
-      --grid: #e1e0d9;
-      --axis: #c3c2b7;
-      --border: rgba(11, 11, 11, 0.10);
-      --series-rebook: #2a78d6;   /* categorical slot 1 */
-      --series-other: #eb6834;    /* categorical slot 2 */
-      --up: #006300;
-      --down: #d03b3b;
-      --wash: rgba(11, 11, 11, 0.05);
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        color-scheme: dark;
-        --page: #0d0d0d;
-        --surface: #1a1a19;
-        --text-primary: #f0efec;
-        --text-secondary: #c3c2b7;
-        --text-muted: #898781;
-        --grid: #2c2c2a;
-        --axis: #383835;
-        --border: rgba(255, 255, 255, 0.10);
-        --series-rebook: #3987e5;
-        --series-other: #d95926;
-        --up: #0ca30c;
-        --down: #e66767;
-        --wash: rgba(255, 255, 255, 0.06);
-      }
-    }
-
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; background: var(--page); color: var(--text-primary);
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; line-height: 1.4;
-    }
-    main { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; }
-    .brand { font-size: 13px; color: var(--text-muted); letter-spacing: 0.02em; }
-    h1 { font-size: 22px; margin: 2px 0 16px; font-weight: 600; }
-    h2 { font-size: 15px; margin: 0 0 2px; font-weight: 600; }
-    .sub { color: var(--text-secondary); font-size: 13px; margin: 0 0 12px; }
-
-    .filters { display: flex; gap: 6px; margin-bottom: 16px; }
-    .filters button {
-      font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
-      border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
-    }
-    .filters button:hover { background: var(--wash); }
-    .filters button[aria-pressed="true"] {
-      color: var(--text-primary); font-weight: 600; border-color: var(--text-secondary);
-    }
-
-    .card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-      padding: 16px; margin-bottom: 12px;
-    }
-    .hero .label { color: var(--text-secondary); font-size: 14px; }
-    .hero .value { font-size: 56px; font-weight: 600; line-height: 1.1; margin: 4px 0; }
-    .delta { font-size: 14px; color: var(--text-secondary); }
-    .delta .up { color: var(--up); font-weight: 600; }
-    .delta .down { color: var(--down); font-weight: 600; }
-
-    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-    .tiles .card { margin: 0; }
-    .tile .label { color: var(--text-secondary); font-size: 13px; }
-    .tile .value { font-size: 28px; font-weight: 600; margin: 2px 0; }
-
-    .legend { display: flex; gap: 16px; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
-    .legend span::before {
-      content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px;
-      margin-right: 6px; vertical-align: -1px; background: var(--swatch);
-    }
-    .chart { position: relative; }
-    .chart svg { display: block; width: 100%; outline: none; }
-    .chart svg:focus-visible { box-shadow: 0 0 0 2px var(--series-rebook); border-radius: 4px; }
-    .tooltip {
-      position: absolute; pointer-events: none; background: var(--surface); color: var(--text-primary);
-      border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); white-space: nowrap; display: none; z-index: 2;
-    }
-    .tooltip .date { color: var(--text-secondary); margin-bottom: 4px; }
-    .tooltip .row { display: flex; align-items: center; gap: 6px; }
-    .tooltip .row b { min-width: 22px; }
-    .tooltip .key { width: 12px; height: 2px; background: var(--k); display: inline-block; }
-    .tooltip .row.total { color: var(--text-secondary); margin-top: 2px; }
-
-    details { margin-top: 10px; font-size: 13px; color: var(--text-secondary); }
-    summary { cursor: pointer; }
-    table { border-collapse: collapse; width: 100%; margin-top: 8px; font-variant-numeric: tabular-nums; }
-    th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--grid); }
-    td.n, th.n { text-align: right; }
-    .table-wrap { max-height: 260px; overflow: auto; }
-
-    .chip-row { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; padding: 6px 0; }
-    .chip-name { font-size: 14px; }
-    .chip-type { font-size: 12px; color: var(--text-muted); }
-    .bar-track { display: flex; align-items: center; gap: 8px; min-width: 0; }
-    .bar { height: 16px; border-radius: 0 4px 4px 0; background: var(--series-rebook); flex: none; min-width: 2px; }
-    .bar-value { font-size: 14px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-
-    .status { color: var(--text-secondary); padding: 24px 0; }
-    .status.error { color: var(--down); }
-    .loading .content { opacity: 0.5; transition: opacity 0.15s; }
-    .hidden { display: none; }
-  </style>
+  <link rel="stylesheet" href="/css/dash.css">
 </head>
 <body>
   <main>
-    <div class="brand">ModernTap</div>
+    <div class="topbar">
+      <div class="brand">ModernTap</div>
+      <div class="who"><button class="linkbtn" id="signout" type="button">Sign out</button></div>
+    </div>
+    <a class="back" id="back" href="/dashboard.html">← All houses</a>
     <h1 id="property-name">Loading…</h1>
 
     <div class="filters" role="group" aria-label="Date range">
@@ -136,7 +31,13 @@
         <div class="delta" id="rebook-delta"></div>
       </section>
 
-      <div class="tiles">
+      <div class="tiles three">
+        <section class="card tile">
+          <div class="label">Potential rebooks (clicks)</div>
+          <div class="value" id="clicks-value">–</div>
+          <div class="delta" id="clicks-delta"></div>
+          <div class="hint">Guests who pressed “Choose your dates”</div>
+        </section>
         <section class="card tile">
           <div class="label">Total taps</div>
           <div class="value" id="total-value">–</div>
@@ -178,11 +79,14 @@
   </main>
 
   <script src="/js/config.js"></script>
+  <script src="/js/auth.js"></script>
   <script>
   (function () {
-    var cfg = window.MODERNTAP;
+    if (!MTAuth.requireSignIn()) return;
+    document.getElementById('signout').addEventListener('click', MTAuth.signOut);
     var params = new URLSearchParams(location.search);
-    var propertyId = params.get('p') || 'ocd-001';
+    var propertyId = params.get('p') || '';
+    if (!propertyId) { location.replace('/dashboard.html'); return; }
     var days = [7, 30, 90].indexOf(Number(params.get('days'))) >= 0 ? Number(params.get('days')) : 30;
     var current = null;
 
@@ -395,6 +299,8 @@
       renderDelta($('rebook-delta'), data.rebookTaps, data.prevRebookTaps);
       $('total-value').textContent = fmt(data.totalTaps);
       renderDelta($('total-delta'), data.totalTaps, data.prevTotalTaps);
+      $('clicks-value').textContent = fmt(data.rebookClicks || 0);
+      renderDelta($('clicks-delta'), data.rebookClicks || 0, data.prevRebookClicks);
       $('share-value').textContent = data.totalTaps ? Math.round((data.rebookTaps / data.totalTaps) * 100) + '%' : '–';
       $('day-sub').textContent = 'Last ' + days + ' days';
       $('status').classList.add('hidden');
@@ -408,10 +314,10 @@
         b.setAttribute('aria-pressed', String(Number(b.dataset.days) === days));
       });
       document.body.classList.add('loading');   // keep the previous render, dimmed
-      var url = cfg.API_URL + '?action=stats&property=' + encodeURIComponent(propertyId) + '&days=' + days;
-      fetch(url)
-        .then(function (r) { return r.json(); })
+      $('back').href = '/dashboard.html?days=' + days;
+      MTAuth.api('stats', { property: propertyId, days: days })
         .then(function (data) {
+          if (data.error === 'no_access') throw new Error('your account doesn’t have access to this house');
           if (!data.ok) throw new Error(data.error || 'Could not load stats');
           render(data);
         })
