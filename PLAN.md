@@ -30,7 +30,7 @@ tap, and we can change where a chip goes later without reprogramming the physica
 |---|---|---|
 | Google Sheet | The database | Your Google Drive |
 | Apps Script | The API: logs taps, serves dashboard data, checks logins | Attached to the Sheet |
-| Tap page | `/t/CHIP_ID` → logs and forwards in under a second | Netlify (this repo) |
+| Guest house page | `/t/CHIP_ID` → logs the tap and shows the house's links | Netlify (this repo) |
 | Dashboard | Login, overview, property detail, admin pages | Netlify (this repo) |
 
 Plain HTML/CSS/JavaScript. No paid services.
@@ -38,14 +38,23 @@ Plain HTML/CSS/JavaScript. No paid services.
 ## Google Sheet tabs
 
 **Properties**
-| property_id | name | address | active |
-|---|---|---|---|
-| ocd-001 | The Ocean Club of Duck | … | TRUE |
+| property_id | name | address | active | tagline |
+|---|---|---|---|---|
+| ocd-001 | The Ocean Club of Duck | … | TRUE | Oceanfront in Tuckahoe… |
 
 **Chips**
-| chip_id | property_id | spot | link_type | destination_url | active |
-|---|---|---|---|---|---|
-| ocd-kitchen | ocd-001 | Kitchen | rebook | https://… | TRUE |
+| chip_id | property_id | spot | link_type | active |
+|---|---|---|---|---|
+| ocd-kitchen | ocd-001 | Kitchen | rebook | TRUE |
+
+**Links** (what the guest page shows; one row per link per house)
+| property_id | link_type | label | url | details | placeholder | sort |
+|---|---|---|---|---|---|---|
+| ocd-001 | rebook | Book your next stay | https://www.twiddy.com/… | … | FALSE | 1 |
+
+**Clicks** (written automatically when a guest opens a link on the house page)
+| timestamp | property_id | link_type | chip_id | device |
+|---|---|---|---|---|
 
 `link_type` options: `rebook`, `wifi`, `guide`, `review`, `local`, `other`.
 
@@ -76,18 +85,31 @@ Plain HTML/CSS/JavaScript. No paid services.
 - **Manager:** the properties assigned to them; can edit chip destinations.
 - **Owner:** their own properties; view only.
 
-**Login (proposed — confirm before building):** each user gets a personal access code stored
-in the Users tab. Apps Script checks the code and returns only that user's properties.
-Simple and free; fine for a pilot, not bank-grade security.
+
+## Guest house page (decided)
+- A chip opens the house's guest page (`/t/CHIP_ID`), with that chip's link as the main card and the
+  house's other links below. `/h/PROPERTY_ID` opens the same page without logging a tap.
+- The page also works as a small ModernTap demo, with a link to the ModernTap website.
+- Rebooking links go to Twiddy's page for that house (guests pick dates there).
+- Links that aren't real yet are marked `placeholder` in the Links tab and show a "Demo placeholder" note.
+- Clicks on links are logged in the Clicks tab.
+
+## Logins (decided)
+- Sign in with Google. Users tab maps each email to a role.
+- Admin: everything. Manager: assigned houses, can edit links. Owner: their houses, view only.
+  Owners with several houses see all of them (`property_ids` is a comma list).
 
 ## Build order
+Re-ordered for the Ocean Club of Duck owner meeting (late November 2026).
+
 1. ✅ **Sheet + Apps Script API** (code written — see `apps-script/SETUP.md`). Create the tabs, add Ocean Club of Duck test data,
    deploy the script. (Setup in your Google account — step-by-step instructions provided.)
-2. ✅ **Tap page** (code written — `site/tap.html`; needs Netlify connected to test). `/t/CHIP_ID` logs the tap and forwards. Test with a phone.
+2. ✅ **Tap logging** (now part of the guest house page).
 3. ✅ **Property page** (`site/property.html?p=PROPERTY_ID`; needs the updated Apps Script redeployed). One property's stats: rebooking taps up top, taps by chip and by day.
-4. **Overview page.** All properties at a glance, ranked by rebooking taps.
-5. **Logins + roles.** Access codes; each role sees the right properties.
-6. **Admin page.** Add/edit properties, chips and users without opening the Sheet.
-7. **Bookings import (later).** Confirmed rebookings and conversion rate.
+4. ✅ **Guest house page** (`site/house.html`).
+5. **Sign in with Google + access levels.**
+6. **Overview page.** All properties at a glance, ranked by rebooking taps.
+7. **Admin page.** Add/edit properties, chips and users without opening the Sheet.
+8. **Bookings import (later).** Confirmed rebookings and conversion rate.
 
 Each step gets tested before the next one starts.

@@ -13,7 +13,8 @@ Sample/test property: The Ocean Club of Duck.
 - **Data:** Google Sheets is the database.
 - **API:** Google Apps Script web app reads/writes the Sheet.
 - **Hosting:** Netlify (static front end), deployed from this GitHub repo.
-- **Chips:** every chip points to a redirect link that logs the tap, then forwards the guest.
+- **Chips:** every chip opens the house's guest page (`/t/CHIP_ID`), which logs the tap and shows that chip's link first, with the house's other links below.
+- **Logins:** Sign in with Google; Users tab maps email → role (admin / manager / owner). Owners with several houses see all of them.
 - **Cost:** free tiers only to start. No paid services or libraries.
 - **Top metric:** rebooking. It should be the most prominent number on the dashboard.
 
@@ -28,5 +29,6 @@ Sample/test property: The Ocean Club of Duck.
 - Propose a plan before writing code for any new feature.
 - Build in small pieces; keep each change focused.
 - Keep it simple: plain HTML/CSS/JavaScript unless there's a strong reason otherwise.
-- Use Ocean Club of Duck as test data.
+- Use Ocean Club of Duck as test data. Links that aren't real yet are marked as placeholders and say so on the page.
+- Owner meeting for Ocean Club of Duck is in late November 2026; Twiddy demo is a few months out.
 - Explain anything I need to do by hand (e.g., setting up the Sheet or deploying Apps Script).

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0f3b52">
+  <title>Welcome · ModernTap</title>
+  <style>
+    :root {
+      --ocean: #0f3b52;
+      --ocean-2: #17587a;
+      --sea: #2a8fb0;
+      --sand: #f6f1e7;
+      --card: #ffffff;
+      --ink: #14212b;
+      --ink-2: #4b5862;
+      --ink-3: #7c8790;
+      --line: #e7e0d2;
+      --note-bg: #fff6e0;
+      --note-ink: #7a5a12;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--sand); color: var(--ink);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; }
+
+    /* ModernTap strip */
+    .mt-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 10px 18px; background: var(--ocean); color: #d9e9f1; font-size: 13px;
+    }
+    .mt-logo { display: flex; align-items: center; gap: 8px; color: #fff; font-weight: 600; letter-spacing: 0.01em; }
+    .mt-logo svg { width: 18px; height: 18px; }
+    .mt-bar a { color: #d9e9f1; text-decoration: none; white-space: nowrap; }
+    .mt-bar a:hover { color: #fff; text-decoration: underline; }
+
+    /* Hero */
+    header.hero {
+      background: linear-gradient(180deg, var(--ocean) 0%, var(--ocean-2) 100%);
+      color: #fff; padding: 22px 20px 64px; position: relative; overflow: hidden;
+    }
+    header.hero::after {
+      content: ""; position: absolute; left: -10%; right: -10%; bottom: -1px; height: 44px;
+      background: var(--sand); border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    }
+    .welcome { font-size: 14px; color: #bcd6e3; margin: 0 0 4px; }
+    h1 { font-size: 28px; line-height: 1.15; margin: 0 0 6px; font-weight: 700; }
+    .tagline { margin: 0; color: #d9e9f1; font-size: 15px; }
+
+    main { max-width: 520px; margin: -40px auto 0; padding: 0 16px 32px; position: relative; z-index: 1; }
+
+    /* Cards */
+    .card {
+      background: var(--card); border-radius: 16px; padding: 18px;
+      box-shadow: 0 1px 2px rgba(20, 33, 43, 0.06), 0 8px 24px rgba(20, 33, 43, 0.06);
+      margin-bottom: 14px;
+    }
+    .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sea); margin: 0 0 8px; }
+    .primary h2 { font-size: 22px; margin: 0 0 6px; }
+    .primary p { margin: 0 0 14px; color: var(--ink-2); }
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+      background: var(--ocean); color: #fff; text-decoration: none; font-weight: 600; font-size: 17px;
+      padding: 14px 18px; border-radius: 12px; border: 0; cursor: pointer;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn svg { width: 18px; height: 18px; }
+    .wifi-box {
+      background: var(--sand); border-radius: 12px; padding: 12px 14px; font-size: 16px;
+      font-variant-numeric: tabular-nums; word-break: break-word;
+    }
+
+    .section-title { font-size: 15px; font-weight: 600; margin: 22px 4px 10px; color: var(--ink-2); }
+    .list { padding: 4px 0; }
+    .item {
+      display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center;
+      padding: 12px 16px; text-decoration: none; color: inherit; border-top: 1px solid var(--line);
+    }
+    .item:first-child { border-top: 0; }
+    a.item:hover { background: #faf8f3; }
+    .icon {
+      width: 40px; height: 40px; border-radius: 10px; background: #e6f1f6; color: var(--ocean-2);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .icon svg { width: 20px; height: 20px; }
+    .item .label { font-weight: 600; }
+    .item .detail { font-size: 14px; color: var(--ink-2); }
+    .chev { color: var(--ink-3); }
+    .chev svg { width: 16px; height: 16px; display: block; }
+
+    .note {
+      display: inline-block; margin-top: 6px; font-size: 12px; line-height: 1.35;
+      background: var(--note-bg); color: var(--note-ink); padding: 3px 8px; border-radius: 6px;
+    }
+    .primary .note { margin: 10px 0 0; }
+
+    /* ModernTap demo */
+    .about { background: transparent; box-shadow: none; border: 1px dashed #cfc5b0; }
+    .about h3 { font-size: 16px; margin: 0 0 6px; }
+    .about p { margin: 0 0 10px; color: var(--ink-2); font-size: 14px; }
+    .about .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+    .about .step { background: var(--card); border-radius: 10px; padding: 10px; font-size: 13px; color: var(--ink-2); text-align: center; }
+    .about .step b { display: block; color: var(--ink); font-size: 14px; margin-bottom: 2px; }
+    .about a.more { font-weight: 600; color: var(--ocean-2); text-decoration: none; }
+    .about a.more:hover { text-decoration: underline; }
+
+    footer { text-align: center; color: var(--ink-3); font-size: 12px; padding: 8px 16px 28px; }
+
+    .state { text-align: center; padding: 40px 12px; color: var(--ink-2); }
+    .spinner {
+      width: 28px; height: 28px; margin: 0 auto 12px; border-radius: 50%;
+      border: 3px solid #d8e6ee; border-top-color: var(--sea); animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="mt-bar">
+    <span class="mt-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M6 9a8 8 0 0 1 12 0"/><path d="M8.5 12a4.5 4.5 0 0 1 7 0"/><circle cx="12" cy="16" r="1.6" fill="currentColor" stroke="none"/>
+      </svg>
+      ModernTap
+    </span>
+    <a id="mt-site-top" href="#">What is this?</a>
+  </div>
+
+  <header class="hero">
+    <p class="welcome">Welcome to</p>
+    <h1 id="name">&nbsp;</h1>
+    <p class="tagline" id="tagline"></p>
+  </header>
+
+  <main>
+    <div id="loading" class="card state"><div class="spinner"></div>Opening your guest page…</div>
+    <div id="error" class="card state hidden"></div>
+
+    <div id="content" class="hidden">
+      <section id="primary" class="card primary hidden"></section>
+      <h2 class="section-title" id="more-title">For your stay</h2>
+      <section class="card list" id="list"></section>
+    </div>
+
+    <section class="card about" id="about">
+      <p class="eyebrow">Powered by ModernTap</p>
+      <h3 id="about-title">You just used a ModernTap plaque</h3>
+      <p>Plaques around this home open the most useful link for that spot, with no app and no QR code.</p>
+      <div class="steps">
+        <div class="step"><b>Tap</b>Hold your phone to a plaque</div>
+        <div class="step"><b>Open</b>This page appears</div>
+        <div class="step"><b>Go</b>Wi-Fi, guides, rebooking</div>
+      </div>
+      <a class="more" id="mt-site" href="#">Learn more about ModernTap →</a>
+      <div id="mt-site-note" class="hidden"><span class="note">Demo placeholder: the ModernTap website link will be added before launch.</span></div>
+    </section>
+  </main>
+
+  <footer>ModernTap · Smart plaques for vacation rentals</footer>
+
+  <script src="/js/config.js"></script>
+  <script>
+  (function () {
+    var cfg = window.MODERNTAP;
+
+    var ICONS = {
+      rebook: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M9 15l2 2 4-4"/>',
+      wifi: '<path d="M2 9a15 15 0 0 1 20 0"/><path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1" fill="currentColor"/>',
+      guide: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M8 7h7M8 11h7"/>',
+      review: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+      local: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+      other: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>',
+    };
+    var CHEVRON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>';
+    var ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+    var PLACEHOLDER_NOTE = 'Demo placeholder: the real link will be added before launch.';
+    var PLACEHOLDER_NOTE_INFO = 'Demo placeholder: real details will be added before launch.';
+
+    function $(id) { return document.getElementById(id); }
+    function el(tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    }
+    function icon(type) {
+      var wrap = el('span', 'icon');
+      wrap.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        (ICONS[type] || ICONS.other) + '</svg>';   // static icon markup only, never data
+      return wrap;
+    }
+    function note(text) { return el('span', 'note', text); }
+
+    var ua = navigator.userAgent;
+    var device = /iPad|Tablet/i.test(ua) || (/Android/i.test(ua) && !/Mobile/i.test(ua)) ? 'tablet'
+               : /Mobi|iPhone|Android/i.test(ua) ? 'phone' : 'desktop';
+
+    // /t/CHIP_ID (from a plaque) or /h/PROPERTY_ID (direct link)
+    var path = location.pathname;
+    var q = new URLSearchParams(location.search);
+    var chipMatch = path.match(/^\/t\/([^\/?#]+)/);
+    var houseMatch = path.match(/^\/h\/([^\/?#]+)/);
+    var chipId = chipMatch ? decodeURIComponent(chipMatch[1]) : q.get('chip');
+    var propertyId = houseMatch ? decodeURIComponent(houseMatch[1]) : q.get('p');
+
+    // ModernTap site links
+    ['mt-site', 'mt-site-top'].forEach(function (id) { $(id).href = cfg.SITE_URL; });
+    if (cfg.SITE_URL_IS_PLACEHOLDER) $('mt-site-note').classList.remove('hidden');
+
+    var house = null;
+
+    function logClick(type) {
+      if (!house) return;
+      var url = cfg.API_URL + '?action=click&property=' + encodeURIComponent(house.property.id) +
+        '&type=' + encodeURIComponent(type) + '&d=' + device +
+        (house.chip ? '&chip=' + encodeURIComponent(house.chip) : '');
+      try { fetch(url, { keepalive: true, mode: 'no-cors' }); } catch (e) { /* never block the guest */ }
+    }
+
+    function renderPrimary(link) {
+      var box = $('primary');
+      box.textContent = '';
+      box.appendChild(el('p', 'eyebrow', link.type === 'rebook' ? 'Loved your stay?' : 'You tapped'));
+      box.appendChild(el('h2', null, link.label));
+      if (link.url) {
+        if (link.details) box.appendChild(el('p', null, link.details));
+        var a = el('a', 'btn');
+        a.href = link.url;
+        a.rel = 'noopener';
+        a.appendChild(document.createTextNode(link.type === 'rebook' ? 'Choose your dates' : 'Open'));
+        var arrow = el('span'); arrow.innerHTML = ARROW; a.appendChild(arrow.firstChild);
+        a.addEventListener('click', function () { logClick(link.type); });
+        box.appendChild(a);
+      } else if (link.details) {
+        box.appendChild(el('div', 'wifi-box', link.details));
+      }
+      if (link.placeholder) box.appendChild(note(link.url ? PLACEHOLDER_NOTE : PLACEHOLDER_NOTE_INFO));
+      box.classList.remove('hidden');
+    }
+
+    function renderList(links) {
+      var list = $('list');
+      list.textContent = '';
+      links.forEach(function (link) {
+        var row = el(link.url ? 'a' : 'div', 'item');
+        if (link.url) {
+          row.href = link.url;
+          row.rel = 'noopener';
+          row.addEventListener('click', function () { logClick(link.type); });
+        }
+        row.appendChild(icon(link.type));
+        var text = el('div');
+        text.appendChild(el('div', 'label', link.label));
+        if (link.details) text.appendChild(el('div', 'detail', link.details));
+        if (link.placeholder) text.appendChild(note(link.url ? PLACEHOLDER_NOTE : PLACEHOLDER_NOTE_INFO));
+        row.appendChild(text);
+        var chev = el('span', 'chev');
+        if (link.url) chev.innerHTML = CHEVRON;
+        row.appendChild(chev);
+        list.appendChild(row);
+      });
+      $('list').classList.toggle('hidden', !links.length);
+      $('more-title').classList.toggle('hidden', !links.length);
+    }
+
+    function render(data) {
+      house = data;
+      $('name').textContent = data.property.name;
+      $('tagline').textContent = data.property.tagline;
+      document.title = data.property.name + ' · Guest page';
+
+      var focus = data.focus ? data.links.filter(function (l) { return l.type === data.focus; })[0] : null;
+      if (focus) {
+        renderPrimary(focus);
+        $('more-title').textContent = 'More for your stay';
+      }
+      renderList(data.links.filter(function (l) { return l !== focus; }));
+      if (!data.chip) $('about-title').textContent = 'This home uses ModernTap plaques';
+
+      $('loading').classList.add('hidden');
+      $('content').classList.remove('hidden');
+    }
+
+    function fail(message) {
+      $('name').textContent = 'ModernTap';
+      $('loading').classList.add('hidden');
+      var box = $('error');
+      box.textContent = message;
+      box.classList.remove('hidden');
+    }
+
+    if (!chipId && !propertyId) { fail('This plaque isn’t set up yet.'); return; }
+
+    var api = cfg.API_URL + '?action=house&d=' + device +
+      (chipId ? '&chip=' + encodeURIComponent(chipId) : '&property=' + encodeURIComponent(propertyId));
+
+    fetch(api)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.ok) render(data);
+        else fail(data.error === 'Chip not found' ? 'This plaque isn’t set up yet.' : 'This page isn’t available right now.');
+      })
+      .catch(function () { fail('Couldn’t load this page. Check your connection and try again.'); });
+  })();
+  </script>
+</body>
+</html>

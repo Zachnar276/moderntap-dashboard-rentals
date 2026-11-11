@@ -1,2 +1,5 @@
-# Chip links: /t/CHIP_ID shows the tap page (address bar keeps /t/CHIP_ID)
-/t/*    /tap.html    200
+# Chip links: /t/CHIP_ID opens the house page with that chip's link up top (and logs the tap).
+/t/*    /house.html    200
+
+# House page without a tap: /h/PROPERTY_ID
+/h/*    /house.html    200
