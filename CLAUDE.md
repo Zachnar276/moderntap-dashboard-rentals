@@ -17,8 +17,12 @@ Sample/test property: The Ocean Club of Duck.
 - **Cost:** free tiers only to start. No paid services or libraries.
 - **Top metric:** rebooking. It should be the most prominent number on the dashboard.
 
-## Open questions
-- How a "rebooking" is counted (tap on a rebooking link vs. confirmed booking) — ask before building the metric.
+## Rebooking definition
+- For now, a rebooking = a tap on a chip whose link type is "rebook".
+- Later, confirmed booking data will be imported by hand; then also show confirmed rebookings and conversion.
+
+## Plan
+- See PLAN.md for the architecture, Sheet layout and build order.
 
 ## How to work
 - Propose a plan before writing code for any new feature.
