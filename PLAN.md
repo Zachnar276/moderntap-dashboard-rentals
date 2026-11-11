@@ -81,7 +81,7 @@ in the Users tab. Apps Script checks the code and returns only that user's prope
 Simple and free; fine for a pilot, not bank-grade security.
 
 ## Build order
-1. **Sheet + Apps Script API.** Create the tabs, add Ocean Club of Duck test data,
+1. ✅ **Sheet + Apps Script API** (code written — see `apps-script/SETUP.md`). Create the tabs, add Ocean Club of Duck test data,
    deploy the script. (Setup in your Google account — step-by-step instructions provided.)
 2. **Tap page.** `/t/CHIP_ID` logs the tap and forwards. Test with a phone.
 3. **Property page.** One property's stats: rebooking taps up top, taps by chip and by day.
