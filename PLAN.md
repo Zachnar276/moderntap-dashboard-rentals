@@ -84,7 +84,7 @@ Simple and free; fine for a pilot, not bank-grade security.
 1. ✅ **Sheet + Apps Script API** (code written — see `apps-script/SETUP.md`). Create the tabs, add Ocean Club of Duck test data,
    deploy the script. (Setup in your Google account — step-by-step instructions provided.)
 2. ✅ **Tap page** (code written — `site/tap.html`; needs Netlify connected to test). `/t/CHIP_ID` logs the tap and forwards. Test with a phone.
-3. **Property page.** One property's stats: rebooking taps up top, taps by chip and by day.
+3. ✅ **Property page** (`site/property.html?p=PROPERTY_ID`; needs the updated Apps Script redeployed). One property's stats: rebooking taps up top, taps by chip and by day.
 4. **Overview page.** All properties at a glance, ranked by rebooking taps.
 5. **Logins + roles.** Access codes; each role sees the right properties.
 6. **Admin page.** Add/edit properties, chips and users without opening the Sheet.

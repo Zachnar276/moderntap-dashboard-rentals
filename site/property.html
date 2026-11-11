@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Property stats · ModernTap</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f9f9f7;
+      --surface: #fcfcfb;
+      --text-primary: #0b0b0b;
+      --text-secondary: #52514e;
+      --text-muted: #898781;
+      --grid: #e1e0d9;
+      --axis: #c3c2b7;
+      --border: rgba(11, 11, 11, 0.10);
+      --series-rebook: #2a78d6;   /* categorical slot 1 */
+      --series-other: #eb6834;    /* categorical slot 2 */
+      --up: #006300;
+      --down: #d03b3b;
+      --wash: rgba(11, 11, 11, 0.05);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --page: #0d0d0d;
+        --surface: #1a1a19;
+        --text-primary: #f0efec;
+        --text-secondary: #c3c2b7;
+        --text-muted: #898781;
+        --grid: #2c2c2a;
+        --axis: #383835;
+        --border: rgba(255, 255, 255, 0.10);
+        --series-rebook: #3987e5;
+        --series-other: #d95926;
+        --up: #0ca30c;
+        --down: #e66767;
+        --wash: rgba(255, 255, 255, 0.06);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--page); color: var(--text-primary);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15px; line-height: 1.4;
+    }
+    main { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; }
+    .brand { font-size: 13px; color: var(--text-muted); letter-spacing: 0.02em; }
+    h1 { font-size: 22px; margin: 2px 0 16px; font-weight: 600; }
+    h2 { font-size: 15px; margin: 0 0 2px; font-weight: 600; }
+    .sub { color: var(--text-secondary); font-size: 13px; margin: 0 0 12px; }
+
+    .filters { display: flex; gap: 6px; margin-bottom: 16px; }
+    .filters button {
+      font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
+    }
+    .filters button:hover { background: var(--wash); }
+    .filters button[aria-pressed="true"] {
+      color: var(--text-primary); font-weight: 600; border-color: var(--text-secondary);
+    }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px; margin-bottom: 12px;
+    }
+    .hero .label { color: var(--text-secondary); font-size: 14px; }
+    .hero .value { font-size: 56px; font-weight: 600; line-height: 1.1; margin: 4px 0; }
+    .delta { font-size: 14px; color: var(--text-secondary); }
+    .delta .up { color: var(--up); font-weight: 600; }
+    .delta .down { color: var(--down); font-weight: 600; }
+
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .tiles .card { margin: 0; }
+    .tile .label { color: var(--text-secondary); font-size: 13px; }
+    .tile .value { font-size: 28px; font-weight: 600; margin: 2px 0; }
+
+    .legend { display: flex; gap: 16px; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
+    .legend span::before {
+      content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+      margin-right: 6px; vertical-align: -1px; background: var(--swatch);
+    }
+    .chart { position: relative; }
+    .chart svg { display: block; width: 100%; outline: none; }
+    .chart svg:focus-visible { box-shadow: 0 0 0 2px var(--series-rebook); border-radius: 4px; }
+    .tooltip {
+      position: absolute; pointer-events: none; background: var(--surface); color: var(--text-primary);
+      border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); white-space: nowrap; display: none; z-index: 2;
+    }
+    .tooltip .date { color: var(--text-secondary); margin-bottom: 4px; }
+    .tooltip .row { display: flex; align-items: center; gap: 6px; }
+    .tooltip .row b { min-width: 22px; }
+    .tooltip .key { width: 12px; height: 2px; background: var(--k); display: inline-block; }
+    .tooltip .row.total { color: var(--text-secondary); margin-top: 2px; }
+
+    details { margin-top: 10px; font-size: 13px; color: var(--text-secondary); }
+    summary { cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--grid); }
+    td.n, th.n { text-align: right; }
+    .table-wrap { max-height: 260px; overflow: auto; }
+
+    .chip-row { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; padding: 6px 0; }
+    .chip-name { font-size: 14px; }
+    .chip-type { font-size: 12px; color: var(--text-muted); }
+    .bar-track { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .bar { height: 16px; border-radius: 0 4px 4px 0; background: var(--series-rebook); flex: none; min-width: 2px; }
+    .bar-value { font-size: 14px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+    .status { color: var(--text-secondary); padding: 24px 0; }
+    .status.error { color: var(--down); }
+    .loading .content { opacity: 0.5; transition: opacity 0.15s; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand">ModernTap</div>
+    <h1 id="property-name">Loading…</h1>
+
+    <div class="filters" role="group" aria-label="Date range">
+      <button type="button" data-days="7">7 days</button>
+      <button type="button" data-days="30">30 days</button>
+      <button type="button" data-days="90">90 days</button>
+    </div>
+
+    <p id="status" class="status">Loading stats…</p>
+
+    <div id="content" class="content hidden">
+      <section class="card hero">
+        <div class="label">Rebooking taps</div>
+        <div class="value" id="rebook-value">–</div>
+        <div class="delta" id="rebook-delta"></div>
+      </section>
+
+      <div class="tiles">
+        <section class="card tile">
+          <div class="label">Total taps</div>
+          <div class="value" id="total-value">–</div>
+          <div class="delta" id="total-delta"></div>
+        </section>
+        <section class="card tile">
+          <div class="label">Share of taps that were rebooking</div>
+          <div class="value" id="share-value">–</div>
+        </section>
+      </div>
+
+      <section class="card">
+        <h2>Taps per day</h2>
+        <p class="sub" id="day-sub"></p>
+        <div class="legend" id="day-legend">
+          <span style="--swatch: var(--series-rebook)">Rebooking</span>
+          <span style="--swatch: var(--series-other)">Other taps</span>
+        </div>
+        <div class="chart" id="day-chart">
+          <div class="tooltip" id="day-tooltip"></div>
+        </div>
+        <details>
+          <summary>Show as table</summary>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th class="n">Rebooking</th><th class="n">Other</th><th class="n">Total</th></tr></thead>
+              <tbody id="day-table"></tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>Taps by chip</h2>
+        <p class="sub">Where guests are tapping in the home</p>
+        <div id="chip-list"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/js/config.js"></script>
+  <script>
+  (function () {
+    var cfg = window.MODERNTAP;
+    var params = new URLSearchParams(location.search);
+    var propertyId = params.get('p') || 'ocd-001';
+    var days = [7, 30, 90].indexOf(Number(params.get('days'))) >= 0 ? Number(params.get('days')) : 30;
+    var current = null;
+
+    var TYPE_LABELS = { rebook: 'Rebooking', wifi: 'Wi-Fi', guide: 'Guidebook', review: 'Review', local: 'Local tips', other: 'Other' };
+    var SVG_NS = 'http://www.w3.org/2000/svg';
+
+    function $(id) { return document.getElementById(id); }
+    function fmt(n) { return Number(n).toLocaleString('en-US'); }
+    function el(tag, attrs, text) {
+      var e = tag === 'svg' || ['rect', 'path', 'line', 'text', 'g'].indexOf(tag) >= 0
+        ? document.createElementNS(SVG_NS, tag) : document.createElement(tag);
+      for (var k in (attrs || {})) e.setAttribute(k, attrs[k]);
+      if (text != null) e.textContent = text;
+      return e;
+    }
+    function shortDate(iso) {
+      var p = iso.split('-');
+      return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    function longDate(iso) {
+      var p = iso.split('-');
+      return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+
+    /* ── Delta line: "▲ 15% vs previous 30 days" ── */
+    function renderDelta(node, now, prev) {
+      node.textContent = '';
+      if (prev == null) return;
+      var period = 'previous ' + days + ' days';
+      if (prev === 0) {
+        node.textContent = now === 0 ? 'No change vs ' + period : 'None in the ' + period;
+        return;
+      }
+      var pct = Math.round(((now - prev) / prev) * 100);
+      if (pct === 0) { node.textContent = 'No change vs ' + period; return; }
+      var span = el('span', { class: pct > 0 ? 'up' : 'down' }, (pct > 0 ? '▲ ' : '▼ ') + Math.abs(pct) + '%');
+      node.appendChild(span);
+      node.appendChild(document.createTextNode(' vs ' + period + ' (' + fmt(prev) + ')'));
+    }
+
+    /* ── Stacked column chart: rebooking + other taps per day ── */
+    // Top of the y-axis: 4 gridline steps, each a whole, "nice" number (1, 2, 5, 10, 20, 25, 50…).
+    function niceMax(max) {
+      var raw = Math.max(1, max / 4);
+      var pow = Math.pow(10, Math.floor(Math.log10(raw)));
+      var step = [1, 2, 2.5, 5, 10].map(function (k) { return k * pow; })
+        .filter(function (s) { return s >= raw && Number.isInteger(s); })[0];
+      return step * 4;
+    }
+
+    function columnPath(x, yTop, w, h, r) {
+      // Square at the baseline, rounded at the data end.
+      r = Math.min(r, w / 2, h);
+      var yb = yTop + h;
+      return 'M' + x + ',' + yb + 'V' + (yTop + r) + 'Q' + x + ',' + yTop + ' ' + (x + r) + ',' + yTop +
+             'H' + (x + w - r) + 'Q' + (x + w) + ',' + yTop + ' ' + (x + w) + ',' + (yTop + r) + 'V' + yb + 'Z';
+    }
+
+    function renderDayChart(data) {
+      var wrap = $('day-chart');
+      var tip = $('day-tooltip');
+      var old = wrap.querySelector('svg');
+      if (old) wrap.removeChild(old);
+
+      var rows = data.byDay;
+      var hasSplit = rows.length && rows[0].rebook != null;
+      $('day-legend').classList.toggle('hidden', !hasSplit);
+
+      var W = Math.max(wrap.clientWidth, 280), H = 200;
+      var m = { top: 8, right: 4, bottom: 22, left: 28 };
+      var iw = W - m.left - m.right, ih = H - m.top - m.bottom;
+      var max = niceMax(Math.max.apply(null, rows.map(function (r) { return r.taps; }).concat([1])));
+      var slot = iw / rows.length;
+      var bw = Math.max(1, Math.min(24, slot - 2));
+      var y = function (v) { return m.top + ih - (v / max) * ih; };
+
+      var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, height: H, tabindex: '0', role: 'img',
+        'aria-label': 'Taps per day for the last ' + days + ' days. Use left and right arrow keys to read each day.' });
+
+      // Gridlines + y ticks
+      for (var i = 0; i <= 4; i++) {
+        var v = (max / 4) * i, yy = Math.round(y(v)) + 0.5;
+        svg.appendChild(el('line', { x1: m.left, x2: W - m.right, y1: yy, y2: yy,
+          stroke: i === 0 ? 'var(--axis)' : 'var(--grid)', 'stroke-width': 1 }));
+        svg.appendChild(el('text', { x: m.left - 6, y: yy + 4, 'text-anchor': 'end', 'font-size': 11,
+          fill: 'var(--text-muted)', style: 'font-variant-numeric: tabular-nums' }, fmt(v)));
+      }
+
+      // Hover highlight band (behind bars)
+      var band = el('rect', { y: m.top, height: ih, width: slot, fill: 'var(--wash)', visibility: 'hidden' });
+      svg.appendChild(band);
+
+      rows.forEach(function (r, idx) {
+        var x = m.left + idx * slot + (slot - bw) / 2;
+        var reb = hasSplit ? r.rebook : 0;
+        var oth = r.taps - reb;
+        var gap = reb > 0 && oth > 0 ? 2 : 0;
+        if (reb > 0) {
+          var hR = (reb / max) * ih;
+          if (oth > 0) svg.appendChild(el('rect', { x: x, y: y(reb), width: bw, height: hR, fill: 'var(--series-rebook)' }));
+          else svg.appendChild(el('path', { d: columnPath(x, y(reb), bw, hR, 4), fill: 'var(--series-rebook)' }));
+        }
+        if (oth > 0) {
+          var top = y(r.taps), hO = (oth / max) * ih - gap;
+          if (hO > 0) svg.appendChild(el('path', { d: columnPath(x, top, bw, hO, 4),
+            fill: hasSplit ? 'var(--series-other)' : 'var(--series-rebook)' }));
+        }
+      });
+
+      // X labels: first, middle, last
+      [0, Math.floor((rows.length - 1) / 2), rows.length - 1].forEach(function (idx, k) {
+        if (!rows[idx]) return;
+        var cx = m.left + idx * slot + slot / 2;
+        svg.appendChild(el('text', { x: cx, y: H - 6, 'font-size': 11, fill: 'var(--text-muted)',
+          'text-anchor': k === 0 ? 'start' : k === 2 ? 'end' : 'middle' }, shortDate(rows[idx].date)));
+      });
+
+      wrap.insertBefore(svg, tip);
+
+      // Tooltip: snaps to the nearest day; works with pointer and arrow keys.
+      var active = -1;
+      function show(idx) {
+        if (idx < 0 || idx >= rows.length) return;
+        active = idx;
+        var r = rows[idx];
+        band.setAttribute('x', m.left + idx * slot);
+        band.setAttribute('visibility', 'visible');
+        tip.textContent = '';
+        tip.appendChild(el('div', { class: 'date' }, longDate(r.date)));
+        function row(val, name, color, cls) {
+          var d = el('div', { class: 'row' + (cls ? ' ' + cls : '') });
+          if (color) { var k = el('span', { class: 'key' }); k.style.setProperty('--k', color); d.appendChild(k); }
+          d.appendChild(el('b', null, fmt(val)));
+          d.appendChild(el('span', null, name));
+          tip.appendChild(d);
+        }
+        if (hasSplit) {
+          row(r.rebook, 'Rebooking', 'var(--series-rebook)');
+          row(r.taps - r.rebook, 'Other taps', 'var(--series-other)');
+          row(r.taps, 'Total', null, 'total');
+        } else {
+          row(r.taps, 'Taps', 'var(--series-rebook)');
+        }
+        tip.style.display = 'block';
+        var scale = svg.getBoundingClientRect().width / W;
+        var cx = (m.left + idx * slot + slot / 2) * scale;
+        var tw = tip.offsetWidth;
+        var left = cx + 12 + tw > wrap.clientWidth ? cx - 12 - tw : cx + 12;
+        tip.style.left = Math.max(0, left) + 'px';
+        tip.style.top = '8px';
+      }
+      function hide() { band.setAttribute('visibility', 'hidden'); tip.style.display = 'none'; }
+
+      svg.addEventListener('pointermove', function (e) {
+        var rect = svg.getBoundingClientRect();
+        var px = (e.clientX - rect.left) * (W / rect.width);
+        show(Math.min(rows.length - 1, Math.max(0, Math.floor((px - m.left) / slot))));
+      });
+      svg.addEventListener('pointerleave', hide);
+      svg.addEventListener('blur', hide);
+      svg.addEventListener('focus', function () { show(active >= 0 ? active : rows.length - 1); });
+      svg.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowLeft') { show(Math.max(0, active - 1)); e.preventDefault(); }
+        if (e.key === 'ArrowRight') { show(Math.min(rows.length - 1, active + 1)); e.preventDefault(); }
+        if (e.key === 'Escape') hide();
+      });
+
+      // Table view
+      var tbody = $('day-table');
+      tbody.textContent = '';
+      rows.slice().reverse().forEach(function (r) {
+        var reb = hasSplit ? r.rebook : null;
+        var tr = el('tr');
+        tr.appendChild(el('td', null, longDate(r.date)));
+        tr.appendChild(el('td', { class: 'n' }, reb == null ? '–' : fmt(reb)));
+        tr.appendChild(el('td', { class: 'n' }, reb == null ? '–' : fmt(r.taps - reb)));
+        tr.appendChild(el('td', { class: 'n' }, fmt(r.taps)));
+        tbody.appendChild(tr);
+      });
+    }
+
+    /* ── Taps by chip: horizontal bars, value at the tip ── */
+    function renderChips(data) {
+      var list = $('chip-list');
+      list.textContent = '';
+      var chips = data.byChip.slice().sort(function (a, b) { return b.taps - a.taps; });
+      if (!chips.length) { list.appendChild(el('p', { class: 'sub' }, 'No chips set up for this property yet.')); return; }
+      var max = Math.max.apply(null, chips.map(function (c) { return c.taps; }).concat([1]));
+      chips.forEach(function (c) {
+        var row = el('div', { class: 'chip-row' });
+        var name = el('div');
+        name.appendChild(el('div', { class: 'chip-name' }, c.spot || c.chip_id));
+        name.appendChild(el('div', { class: 'chip-type' }, TYPE_LABELS[c.link_type] || c.link_type));
+        var track = el('div', { class: 'bar-track' });
+        var bar = el('div', { class: 'bar' });
+        bar.style.width = 'calc((100% - 40px) * ' + (c.taps / max) + ')';
+        track.appendChild(bar);
+        track.appendChild(el('span', { class: 'bar-value' }, fmt(c.taps)));
+        row.appendChild(name);
+        row.appendChild(track);
+        list.appendChild(row);
+      });
+    }
+
+    function render(data) {
+      current = data;
+      $('property-name').textContent = data.property.name;
+      document.title = data.property.name + ' · ModernTap';
+      $('rebook-value').textContent = fmt(data.rebookTaps);
+      renderDelta($('rebook-delta'), data.rebookTaps, data.prevRebookTaps);
+      $('total-value').textContent = fmt(data.totalTaps);
+      renderDelta($('total-delta'), data.totalTaps, data.prevTotalTaps);
+      $('share-value').textContent = data.totalTaps ? Math.round((data.rebookTaps / data.totalTaps) * 100) + '%' : '–';
+      $('day-sub').textContent = 'Last ' + days + ' days';
+      $('status').classList.add('hidden');
+      $('content').classList.remove('hidden');
+      renderDayChart(data);
+      renderChips(data);
+    }
+
+    function load() {
+      document.querySelectorAll('.filters button').forEach(function (b) {
+        b.setAttribute('aria-pressed', String(Number(b.dataset.days) === days));
+      });
+      document.body.classList.add('loading');   // keep the previous render, dimmed
+      var url = cfg.API_URL + '?action=stats&property=' + encodeURIComponent(propertyId) + '&days=' + days;
+      fetch(url)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok) throw new Error(data.error || 'Could not load stats');
+          render(data);
+        })
+        .catch(function (err) {
+          if (!current) {
+            $('property-name').textContent = 'Property stats';
+            $('status').textContent = 'Couldn’t load stats: ' + err.message;
+            $('status').classList.add('error');
+          }
+        })
+        .then(function () { document.body.classList.remove('loading'); });
+    }
+
+    document.querySelectorAll('.filters button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        days = Number(b.dataset.days);
+        params.set('days', days);
+        history.replaceState(null, '', '?' + params.toString());
+        load();
+      });
+    });
+
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () { if (current) renderDayChart(current); }, 150);
+    });
+
+    load();
+  })();
+  </script>
+</body>
+</html>

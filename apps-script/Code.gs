@@ -157,12 +157,27 @@ function getStats_(propertyId, days) {
   days = Math.min(Math.max(Math.round(days), 1), 365);
   const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
   const now = new Date();
-  const since = new Date(now.getTime() - days * 86400000);
+  function dayKey(d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); }
+
+  // Whole calendar days: this period = the last `days` days including today;
+  // previous period = the `days` days before that.
+  const periodDays = {};
+  const prevDays = {};
+  for (let i = 0; i < days * 2; i++) {
+    const key = dayKey(new Date(now.getTime() - i * 86400000));
+    if (i < days) periodDays[key] = true; else prevDays[key] = true;
+  }
 
   const chips = readTable_('Chips').filter(function (c) { return String(c.property_id) === pid; });
-  const taps = readTable_('Taps').filter(function (t) {
-    return String(t.property_id) === pid && t.timestamp instanceof Date && t.timestamp >= since;
+  const taps = [];
+  const prevTaps = [];
+  readTable_('Taps').forEach(function (t) {
+    if (String(t.property_id) !== pid || !(t.timestamp instanceof Date)) return;
+    t.day = dayKey(t.timestamp);
+    if (periodDays[t.day]) taps.push(t);
+    else if (prevDays[t.day]) prevTaps.push(t);
   });
+  const prevRebook = prevTaps.filter(function (t) { return t.link_type === 'rebook'; }).length;
 
   const byType = {};
   LINK_TYPES.forEach(function (t) { byType[t] = 0; });
@@ -174,15 +189,15 @@ function getStats_(propertyId, days) {
 
   const byDay = {};
   for (let i = days - 1; i >= 0; i--) {
-    byDay[Utilities.formatDate(new Date(now.getTime() - i * 86400000), tz, 'yyyy-MM-dd')] = 0;
+    byDay[dayKey(new Date(now.getTime() - i * 86400000))] = { taps: 0, rebook: 0 };
   }
 
   taps.forEach(function (t) {
     const type = LINK_TYPES.indexOf(t.link_type) >= 0 ? t.link_type : 'other';
     byType[type]++;
     if (byChip[t.chip_id]) byChip[t.chip_id].taps++;
-    const day = Utilities.formatDate(t.timestamp, tz, 'yyyy-MM-dd');
-    if (day in byDay) byDay[day]++;
+    byDay[t.day].taps++;
+    if (type === 'rebook') byDay[t.day].rebook++;
   });
 
   return {
@@ -191,9 +206,13 @@ function getStats_(propertyId, days) {
     days: days,
     totalTaps: taps.length,
     rebookTaps: byType.rebook,
+    prevTotalTaps: prevTaps.length,
+    prevRebookTaps: prevRebook,
     byType: byType,
     byChip: Object.keys(byChip).map(function (k) { return byChip[k]; }),
-    byDay: Object.keys(byDay).map(function (d) { return { date: d, taps: byDay[d] }; }),
+    byDay: Object.keys(byDay).map(function (d) {
+      return { date: d, taps: byDay[d].taps, rebook: byDay[d].rebook };
+    }),
   };
 }
 
