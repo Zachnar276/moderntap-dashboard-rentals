@@ -81,6 +81,9 @@ Plain HTML/CSS/JavaScript. No paid services.
   (clicks: 10 min) using an anonymous random ID that is never stored. Numbers are estimates.
 - Nothing secret is in this repo: the Apps Script URL and Google client ID are public by design.
 - Anything on a guest page (e.g. a Wi-Fi password) is effectively public.
+- Admin edits are checked on the server: admin-only, IDs/emails/links validated, links must be https,
+  text that could act as a Sheet formula is escaped, and you can't remove your own admin access.
+- Sign-in is in Google "testing" mode: each person must also be added as a test user in Google Cloud.
 
 ## Rebooking metric
 - **Now:** a rebooking = a tap on a chip with `link_type = rebook`.
@@ -118,7 +121,9 @@ Re-ordered for the Ocean Club of Duck owner meeting (late November 2026).
 4. ✅ **Guest house page** (`site/house.html`).
 5. ✅ **Sign in with Google + access levels** (`index.html` → `dashboard.html`).
 6. ✅ **Overview page** (`dashboard.html`): every house the user can see, totals, sortable; built for 9+ houses.
-7. **Admin page.** Add/edit properties, chips and users without opening the Sheet.
-8. **Bookings import (later).** Confirmed rebookings and conversion rate.
+7. ✅ **Admin page** (`admin.html`, admins only): houses, plaques (with the link to write on each chip,
+   copy, preview, printable list), guest page links, and people/access.
+8. **Before plaques go in:** run `clearTestTaps` to remove demo taps (both houses' demo taps are marked `test`).
+9. **Bookings import (later).** Confirmed rebookings and conversion rate.
 
 Each step gets tested before the next one starts.

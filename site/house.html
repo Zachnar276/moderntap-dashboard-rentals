@@ -229,8 +229,10 @@
 
     var house = null;
 
+    var isPreview = q.get('preview') === '1';
+
     function logClick(type) {
-      if (!house) return;
+      if (!house || isPreview) return;
       var url = cfg.API_URL + '?action=click&property=' + encodeURIComponent(house.property.id) +
         '&type=' + encodeURIComponent(type) + '&d=' + device + '&v=' + visitor +
         (house.chip ? '&chip=' + encodeURIComponent(house.chip) : '');
@@ -289,7 +291,9 @@
       $('tagline').textContent = data.property.tagline;
       document.title = data.property.name + ' · Guest page';
 
-      var focus = data.focus ? data.links.filter(function (l) { return l.type === data.focus; })[0] : null;
+      // Admin "Test" previews open /h/PROPERTY?focus=TYPE (not logged as a tap).
+      var focusType = data.focus || (!data.chip ? q.get('focus') : null);
+      var focus = focusType ? data.links.filter(function (l) { return l.type === focusType; })[0] : null;
       if (focus) {
         renderPrimary(focus);
         $('more-title').textContent = 'More for your stay';

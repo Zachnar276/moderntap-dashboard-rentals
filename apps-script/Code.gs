@@ -128,6 +128,7 @@ function doGet(e) {
  *   { action: 'me' }
  *   { action: 'overview', days: 30 }
  *   { action: 'stats', property: 'ocd-001', days: 30 }
+ *   admin only: adminData, saveProperty, saveChip, saveLink, deleteLink, saveUser, deleteUser
  */
 function doPost(e) {
   try {
@@ -147,7 +148,7 @@ function doPost(e) {
         }
         return json_(getStats_(String(body.property), days));
       default:
-        return json_({ ok: false, error: 'Unknown action' });
+        return json_(adminAction_(user, body));
     }
   } catch (err) {
     return json_({ ok: false, error: errText_(err) });
@@ -446,6 +447,172 @@ function getOverview_(user, days) {
   });
 
   return { ok: true, user: publicUser_(user), days: days, totals: totals, houses: houses };
+}
+
+/* ───────────────────────── Admin (signed-in admins only) ───────────────────────── */
+
+const ID_RE = /^[a-z0-9][a-z0-9-]{1,39}$/;
+const EMAIL_RE = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
+
+/** Every admin action goes through here, after verifyUser_ has passed. */
+function adminAction_(user, body) {
+  if (user.role !== 'admin') return { ok: false, error: 'admin_only' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    switch (body.action) {
+      case 'adminData':    return adminData_();
+      case 'saveProperty': return saveProperty_(body.record || {});
+      case 'saveChip':     return saveChip_(body.record || {});
+      case 'saveLink':     return saveLink_(body.record || {});
+      case 'deleteLink':   return deleteRows_('Links', function (r) {
+        return String(r.property_id) === String(body.property_id) && String(r.link_type) === String(body.link_type);
+      });
+      case 'saveUser':     return saveUser_(user, body.record || {});
+      case 'deleteUser':   return deleteUser_(user, String(body.email || ''));
+      default:             return { ok: false, error: 'Unknown action' };
+    }
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function adminData_() {
+  return {
+    ok: true,
+    properties: readTable_('Properties').map(function (p) {
+      return { property_id: String(p.property_id), name: p.name, address: p.address, tagline: p.tagline, active: isTrue_(p.active) };
+    }),
+    chips: readTable_('Chips').map(function (c) {
+      return { chip_id: String(c.chip_id), property_id: String(c.property_id), spot: c.spot, link_type: c.link_type, active: isTrue_(c.active) };
+    }),
+    links: readTable_('Links').map(function (l) {
+      return { property_id: String(l.property_id), link_type: l.link_type, label: l.label, url: l.url, details: l.details,
+               placeholder: isTrue_(l.placeholder), sort: Number(l.sort) || 99 };
+    }),
+    users: readTable_('Users').map(function (u) {
+      return { user_id: u.user_id, name: u.name, email: String(u.email).toLowerCase(), role: u.role,
+               property_ids: String(u.property_ids || '') };
+    }),
+    linkTypes: LINK_TYPES,
+    roles: ROLES,
+  };
+}
+
+/* ── Validation helpers ── */
+
+/** Plain text for a cell. Leading = + - @ would make Sheets treat it as a formula, so it's escaped. */
+function cleanText_(v, max) {
+  let s = String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max || 200);
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
+  return s;
+}
+function cleanUrl_(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  if (!/^https:\/\/[^\s"'<>]+$/i.test(s) || s.length > 500) throw new Error('Links must start with https:// and contain no spaces.');
+  return s;
+}
+function propertyExists_(id) {
+  return readTable_('Properties').some(function (p) { return String(p.property_id) === id; });
+}
+function fail_(msg) { return { ok: false, error: msg }; }
+
+/* ── Generic upsert / delete on a tab, matched by a key function ── */
+
+function upsertRow_(tab, match, record) {
+  const sh = getSheet_(tab);
+  const values = sh.getDataRange().getValues();
+  const headers = values[0];
+  const row = headers.map(function (h) { return record[h] === undefined ? '' : record[h]; });
+  for (let i = 1; i < values.length; i++) {
+    const obj = {};
+    headers.forEach(function (h, j) { obj[h] = values[i][j]; });
+    if (match(obj)) {
+      sh.getRange(i + 1, 1, 1, headers.length).setValues([row]);
+      return { ok: true, updated: true };
+    }
+  }
+  sh.appendRow(row);
+  return { ok: true, created: true };
+}
+
+function deleteRows_(tab, match) {
+  const sh = getSheet_(tab);
+  const values = sh.getDataRange().getValues();
+  const headers = values[0];
+  let removed = 0;
+  for (let i = values.length - 1; i >= 1; i--) {
+    const obj = {};
+    headers.forEach(function (h, j) { obj[h] = values[i][j]; });
+    if (match(obj)) { sh.deleteRow(i + 1); removed++; }
+  }
+  return { ok: true, removed: removed };
+}
+
+/* ── Records ── */
+
+function saveProperty_(r) {
+  const id = String(r.property_id || '').trim().toLowerCase();
+  if (!ID_RE.test(id)) return fail_('House ID: use 2–40 lowercase letters, numbers or dashes (e.g. ssc-001).');
+  const name = cleanText_(r.name, 120);
+  if (!name) return fail_('House name is required.');
+  return upsertRow_('Properties', function (p) { return String(p.property_id) === id; }, {
+    property_id: id, name: name, address: cleanText_(r.address, 200), active: r.active !== false,
+    tagline: cleanText_(r.tagline, 160),
+  });
+}
+
+function saveChip_(r) {
+  const id = String(r.chip_id || '').trim().toLowerCase();
+  if (!ID_RE.test(id)) return fail_('Plaque ID: use 2–40 lowercase letters, numbers or dashes (e.g. ssc-kitchen).');
+  const pid = String(r.property_id || '').trim();
+  if (!propertyExists_(pid)) return fail_('That house doesn’t exist.');
+  if (LINK_TYPES.indexOf(r.link_type) < 0) return fail_('Pick what the plaque opens.');
+  // A plaque ID is printed on a physical chip, so it can't be moved to another house.
+  const existing = readTable_('Chips').filter(function (c) { return String(c.chip_id).toLowerCase() === id; })[0];
+  if (existing && String(existing.property_id) !== pid) return fail_('That plaque ID is already used by another house.');
+  return upsertRow_('Chips', function (c) { return String(c.chip_id).toLowerCase() === id; }, {
+    chip_id: id, property_id: pid, spot: cleanText_(r.spot, 80), link_type: r.link_type, active: r.active !== false,
+  });
+}
+
+function saveLink_(r) {
+  const pid = String(r.property_id || '').trim();
+  if (!propertyExists_(pid)) return fail_('That house doesn’t exist.');
+  if (LINK_TYPES.indexOf(r.link_type) < 0) return fail_('Pick a link type.');
+  const label = cleanText_(r.label, 80);
+  if (!label) return fail_('Label is required.');
+  let url;
+  try { url = cleanUrl_(r.url); } catch (e) { return fail_(e.message); }
+  return upsertRow_('Links', function (l) {
+    return String(l.property_id) === pid && String(l.link_type) === r.link_type;
+  }, {
+    property_id: pid, link_type: r.link_type, label: label, url: url, details: cleanText_(r.details, 200),
+    placeholder: r.placeholder === true, sort: Math.min(Math.max(Number(r.sort) || 99, 1), 99),
+  });
+}
+
+function saveUser_(me, r) {
+  const email = String(r.email || '').trim().toLowerCase();
+  if (!EMAIL_RE.test(email) || email.length > 120) return fail_('Enter a valid email address.');
+  const role = String(r.role || '').toLowerCase();
+  if (ROLES.indexOf(role) < 0) return fail_('Pick a role.');
+  if (email === me.email && role !== 'admin') return fail_('You can’t remove your own admin access.');
+  const ids = String(r.property_ids || '').split(/[,\s]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+  const bad = ids.filter(function (id) { return !propertyExists_(id); });
+  if (bad.length) return fail_('Unknown house ID: ' + bad.join(', '));
+  const existing = readTable_('Users').filter(function (u) { return String(u.email).toLowerCase() === email; })[0];
+  return upsertRow_('Users', function (u) { return String(u.email).toLowerCase() === email; }, {
+    user_id: existing ? existing.user_id : 'u-' + Utilities.getUuid().slice(0, 8),
+    name: cleanText_(r.name, 80), email: email, role: role, property_ids: role === 'admin' ? '' : ids.join(', '),
+  });
+}
+
+function deleteUser_(me, email) {
+  email = email.trim().toLowerCase();
+  if (email === me.email) return fail_('You can’t remove yourself.');
+  return deleteRows_('Users', function (u) { return String(u.email).toLowerCase() === email; });
 }
 
 /* ───────────────────────── Helpers ───────────────────────── */

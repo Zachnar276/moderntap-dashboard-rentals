@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Admin · ModernTap</title>
+  <link rel="stylesheet" href="/css/dash.css">
+  <style>
+    main { max-width: 1040px; }
+    .tabs { display: flex; gap: 6px; margin: 4px 0 16px; }
+    .layout { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
+    @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+    .house-list { display: flex; flex-direction: column; gap: 6px; }
+    .house-btn {
+      text-align: left; font: inherit; padding: 10px 12px; border-radius: 10px; cursor: pointer;
+      background: var(--surface); color: var(--text-primary); border: 1px solid var(--border);
+    }
+    .house-btn[aria-current="true"] { border-color: var(--text-secondary); font-weight: 600; }
+    .house-btn small { display: block; color: var(--text-muted); font-weight: 400; font-size: 12px; }
+    .btn {
+      font: inherit; font-size: 14px; padding: 7px 14px; border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text-primary);
+    }
+    .btn.primary { background: var(--text-primary); color: var(--surface); border-color: var(--text-primary); }
+    .btn.danger { color: var(--down); }
+    .btn.small { font-size: 13px; padding: 4px 10px; }
+    a.btn { text-decoration: none; display: inline-block; }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .section-head h2 { margin: 0; }
+    form.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 12px; }
+    form.grid .full { grid-column: 1 / -1; }
+    label.f { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-secondary); }
+    label.f input, label.f select {
+      font: inherit; font-size: 14px; padding: 7px 9px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--page); color: var(--text-primary);
+    }
+    label.check { flex-direction: row; align-items: center; gap: 8px; }
+    .form-actions { display: flex; gap: 8px; align-items: center; grid-column: 1 / -1; }
+    .form-msg { font-size: 13px; }
+    .form-msg.error { color: var(--down); }
+    .form-msg.ok { color: var(--up); }
+    .rows { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .rows th { text-align: left; font-weight: 600; font-size: 12px; color: var(--text-muted); padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+    .rows td { padding: 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+    .rows td.actions { white-space: nowrap; text-align: right; }
+    .url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; word-break: break-all; }
+    .badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); }
+    .badge.warn { border-color: #e0b54a; color: #9a6b00; }
+    .badge.off { color: var(--text-muted); }
+    .muted { color: var(--text-muted); }
+    .note { font-size: 13px; color: var(--text-secondary); background: var(--wash); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+    .editor { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--grid); }
+    .scroll { overflow-x: auto; }
+    @media print {
+      .topbar, .tabs, .house-list, .btn, .editor, .back, #people-panel, .no-print, td.actions, th.actions { display: none !important; }
+      .layout { display: block; }
+      .card { border: 0; box-shadow: none; }
+      body { background: #fff; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="topbar">
+      <div class="brand">ModernTap · Admin</div>
+      <div class="who"><span id="who"></span> · <button class="linkbtn" id="signout" type="button">Sign out</button></div>
+    </div>
+    <a class="back" href="/dashboard.html">← Dashboard</a>
+    <h1>Admin</h1>
+
+    <div class="tabs filters" role="tablist">
+      <button type="button" role="tab" data-tab="houses" aria-pressed="true">Houses &amp; plaques</button>
+      <button type="button" role="tab" data-tab="people" aria-pressed="false">People</button>
+    </div>
+
+    <p id="status" class="status">Loading…</p>
+
+    <!-- HOUSES -->
+    <div id="houses-panel" class="hidden">
+      <div class="layout">
+        <div>
+          <div class="house-list" id="house-list"></div>
+          <button class="btn" type="button" id="add-house" style="margin-top:8px;width:100%">+ Add house</button>
+        </div>
+        <div id="house-detail"></div>
+      </div>
+    </div>
+
+    <!-- PEOPLE -->
+    <div id="people-panel" class="hidden">
+      <section class="card">
+        <div class="section-head">
+          <h2>People with dashboard access</h2>
+          <button class="btn" type="button" id="add-person">+ Add person</button>
+        </div>
+        <p class="note">
+          <b>Sign-in is in testing mode.</b> Besides adding someone here, their Google email must also be on the
+          approved-tester list in Google Cloud (Google Auth Platform → Audience → Test users), or Google will block their sign-in.
+        </p>
+        <div id="person-editor"></div>
+        <div class="scroll"><table class="rows" id="people-table"></table></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+  (function () {
+    if (!MTAuth.requireSignIn()) return;
+    $('signout').addEventListener('click', MTAuth.signOut);
+
+    var TYPE_LABELS = { rebook: 'Rebooking', wifi: 'Wi-Fi', guide: 'Guidebook', review: 'Review', local: 'Local tips', other: 'Other' };
+    var data = null;
+    var selected = null;          // property_id
+    var editing = null;           // { kind, record } currently open editor
+
+    function $(id) { return document.getElementById(id); }
+    function el(tag, attrs, text) {
+      var e = document.createElement(tag);
+      for (var k in (attrs || {})) {
+        if (k === 'class') e.className = attrs[k];
+        else if (k === 'onclick') e.addEventListener('click', attrs[k]);
+        else e.setAttribute(k, attrs[k]);
+      }
+      if (text != null) e.textContent = text;
+      return e;
+    }
+    function plaqueUrl(chipId) { return location.origin + '/t/' + encodeURIComponent(chipId); }
+    function houseUrl(pid) { return location.origin + '/h/' + encodeURIComponent(pid); }
+    function slug(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20); }
+
+    /* ── Load ── */
+    function load(keepSelection) {
+      return MTAuth.api('adminData').then(function (d) {
+        if (!d.ok) {
+          $('status').textContent = d.error === 'admin_only' ? 'This page is for ModernTap admins only.' : 'Couldn’t load: ' + d.error;
+          $('status').classList.add('error');
+          return;
+        }
+        data = d;
+        if (!keepSelection || !data.properties.some(function (p) { return p.property_id === selected; })) {
+          selected = data.properties.length ? data.properties[0].property_id : null;
+        }
+        $('status').classList.add('hidden');
+        showTab(currentTab);
+        renderHouses();
+        renderPeople();
+      }).catch(function (err) { $('status').textContent = 'Couldn’t load: ' + err.message; });
+    }
+
+    /* ── Tabs ── */
+    var currentTab = 'houses';
+    function showTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tabs button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tab === tab)); });
+      $('houses-panel').classList.toggle('hidden', tab !== 'houses');
+      $('people-panel').classList.toggle('hidden', tab !== 'people');
+    }
+    document.querySelectorAll('.tabs button').forEach(function (b) {
+      b.addEventListener('click', function () { if (data) showTab(b.dataset.tab); });
+    });
+
+    /* ── Generic form builder ── */
+    // fields: [{ name, label, type: text|select|checkbox|number, options, value, required, full, hint, readonly }]
+    function buildForm(fields, onSave, onCancel, onDelete) {
+      var form = el('form', { class: 'grid', novalidate: '' });
+      fields.forEach(function (f) {
+        var wrap = el('label', { class: 'f' + (f.type === 'checkbox' ? ' check' : '') + (f.full ? ' full' : '') });
+        var input;
+        if (f.type === 'select') {
+          input = el('select', { name: f.name });
+          f.options.forEach(function (o) {
+            var opt = el('option', { value: o.value }, o.label);
+            if (String(o.value) === String(f.value)) opt.selected = true;
+            input.appendChild(opt);
+          });
+        } else {
+          input = el('input', { name: f.name, type: f.type || 'text' });
+          if (f.type === 'checkbox') input.checked = !!f.value;
+          else input.value = f.value == null ? '' : f.value;
+          if (f.placeholder) input.placeholder = f.placeholder;
+        }
+        if (f.readonly) input.disabled = true;
+        if (f.type === 'checkbox') { wrap.appendChild(input); wrap.appendChild(document.createTextNode(f.label)); }
+        else { wrap.appendChild(document.createTextNode(f.label)); wrap.appendChild(input); }
+        if (f.hint) wrap.appendChild(el('span', { class: 'hint' }, f.hint));
+        form.appendChild(wrap);
+      });
+      var actions = el('div', { class: 'form-actions' });
+      var save = el('button', { class: 'btn primary', type: 'submit' }, 'Save');
+      actions.appendChild(save);
+      actions.appendChild(el('button', { class: 'btn', type: 'button', onclick: onCancel }, 'Cancel'));
+      if (onDelete) actions.appendChild(el('button', { class: 'btn danger', type: 'button', onclick: onDelete }, 'Remove'));
+      var msg = el('span', { class: 'form-msg', role: 'status' });
+      actions.appendChild(msg);
+      form.appendChild(actions);
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var rec = {};
+        fields.forEach(function (f) {
+          var inp = form.elements[f.name];
+          rec[f.name] = f.type === 'checkbox' ? inp.checked : f.type === 'number' ? Number(inp.value) : inp.value.trim();
+        });
+        save.disabled = true;
+        msg.className = 'form-msg'; msg.textContent = 'Saving…';
+        onSave(rec).then(function (res) {
+          save.disabled = false;
+          if (!res.ok) { msg.className = 'form-msg error'; msg.textContent = res.error || 'Couldn’t save.'; return; }
+          editing = null;
+          load(true);
+        }).catch(function (err) {
+          save.disabled = false; msg.className = 'form-msg error'; msg.textContent = err.message;
+        });
+      });
+      return form;
+    }
+    function closeEditor() { editing = null; renderHouses(); renderPeople(); }
+
+    /* ── Houses ── */
+    function renderHouses() {
+      var list = $('house-list');
+      list.textContent = '';
+      data.properties.forEach(function (p) {
+        var plaques = data.chips.filter(function (c) { return c.property_id === p.property_id; }).length;
+        var b = el('button', { class: 'house-btn', type: 'button', 'aria-current': String(p.property_id === selected) });
+        b.appendChild(document.createTextNode(p.name));
+        b.appendChild(el('small', null, p.property_id + ' · ' + plaques + ' plaque' + (plaques === 1 ? '' : 's') + (p.active ? '' : ' · hidden')));
+        b.addEventListener('click', function () { selected = p.property_id; editing = null; renderHouses(); });
+        list.appendChild(b);
+      });
+      renderHouseDetail();
+    }
+
+    function renderHouseDetail() {
+      var box = $('house-detail');
+      box.textContent = '';
+      if (editing && editing.kind === 'newHouse') { box.appendChild(houseEditor(null)); return; }
+      var p = data.properties.filter(function (x) { return x.property_id === selected; })[0];
+      if (!p) { box.appendChild(el('p', { class: 'sub' }, 'No houses yet. Add one to get started.')); return; }
+
+      // House info
+      var info = el('section', { class: 'card' });
+      var head = el('div', { class: 'section-head' });
+      var title = el('div');
+      title.appendChild(el('h2', null, p.name));
+      title.appendChild(el('div', { class: 'sub' }, [p.address, p.tagline].filter(Boolean).join(' · ') || ' '));
+      head.appendChild(title);
+      var hb = el('div', { class: 'no-print' });
+      hb.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function () { editing = { kind: 'house' }; renderHouseDetail(); } }, 'Edit house'));
+      head.appendChild(hb);
+      info.appendChild(head);
+      var meta = el('div', { class: 'sub' });
+      meta.appendChild(document.createTextNode('ID ' + p.property_id + ' · '));
+      meta.appendChild(el('span', { class: 'badge' + (p.active ? '' : ' off') }, p.active ? 'Visible' : 'Hidden'));
+      meta.appendChild(document.createTextNode(' · Guest page: '));
+      var gp = el('a', { href: houseUrl(p.property_id), target: '_blank', rel: 'noopener', class: 'url' }, houseUrl(p.property_id));
+      meta.appendChild(gp);
+      info.appendChild(meta);
+      if (editing && editing.kind === 'house') info.appendChild(houseEditor(p));
+      box.appendChild(info);
+
+      box.appendChild(plaqueSection(p));
+      box.appendChild(linkSection(p));
+    }
+
+    function houseEditor(p) {
+      var wrap = el('div', { class: 'editor' });
+      if (!p) wrap.appendChild(el('h2', null, 'Add a house'));
+      wrap.appendChild(buildForm([
+        { name: 'name', label: 'House name', value: p ? p.name : '', full: true },
+        { name: 'property_id', label: 'House ID', value: p ? p.property_id : '', readonly: !!p,
+          hint: p ? 'Can’t be changed (it’s part of the plaque links).' : 'Short and permanent, e.g. ssc-001' },
+        { name: 'address', label: 'Address', value: p ? p.address : '' },
+        { name: 'tagline', label: 'Short description (shown to guests)', value: p ? p.tagline : '', full: true,
+          placeholder: 'Oceanfront in Duck · 8 bedrooms · Sleeps 22' },
+        { name: 'active', label: 'Visible on the dashboard and guest page', type: 'checkbox', value: p ? p.active : true },
+      ], function (rec) {
+        if (p) rec.property_id = p.property_id;
+        if (!p) selected = String(rec.property_id).toLowerCase();
+        return MTAuth.api('saveProperty', { record: rec });
+      }, function () { editing = null; renderHouseDetail(); }));
+      // Suggest an ID from the name for new houses.
+      if (!p) {
+        var form = wrap.querySelector('form');
+        form.elements.name.addEventListener('input', function () {
+          if (!form.elements.property_id.dataset.touched) {
+            var words = form.elements.name.value.replace(/^the\s+/i, '').split(/[^a-z0-9]+/i).filter(Boolean);
+            form.elements.property_id.value = words.length ? words.slice(0, 3).map(function (w) { return w[0]; }).join('').toLowerCase() + '-001' : '';
+          }
+        });
+        form.elements.property_id.addEventListener('input', function () { this.dataset.touched = '1'; });
+      }
+      return wrap;
+    }
+
+    function plaqueSection(p) {
+      var sec = el('section', { class: 'card' });
+      var head = el('div', { class: 'section-head' });
+      head.appendChild(el('h2', null, 'Plaques'));
+      var hb = el('div', { class: 'no-print' });
+      hb.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function () { window.print(); } }, 'Print plaque list'));
+      hb.appendChild(document.createTextNode(' '));
+      hb.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function () { editing = { kind: 'chip', record: null }; renderHouseDetail(); } }, '+ Add plaque'));
+      head.appendChild(hb);
+      sec.appendChild(head);
+      sec.appendChild(el('p', { class: 'sub' }, 'Write each plaque’s link onto its NFC chip. Tapping it opens this house’s guest page with that plaque’s link on top.'));
+
+      if (editing && editing.kind === 'chip' && !editing.record) sec.appendChild(chipEditor(p, null));
+
+      var chips = data.chips.filter(function (c) { return c.property_id === p.property_id; });
+      if (!chips.length) { sec.appendChild(el('p', { class: 'muted' }, 'No plaques yet.')); return sec; }
+      var wrap = el('div', { class: 'scroll' });
+      var t = el('table', { class: 'rows' });
+      var hr = el('tr');
+      ['Spot', 'Opens', 'Link to write on the chip', ''].forEach(function (h, i) { hr.appendChild(el('th', i === 3 ? { class: 'actions' } : null, h)); });
+      t.appendChild(hr);
+      chips.forEach(function (c) {
+        var tr = el('tr');
+        var spot = el('td');
+        spot.appendChild(document.createTextNode(c.spot || c.chip_id));
+        if (!c.active) { spot.appendChild(document.createTextNode(' ')); spot.appendChild(el('span', { class: 'badge off' }, 'Off')); }
+        spot.appendChild(el('div', { class: 'hint' }, c.chip_id));
+        tr.appendChild(spot);
+        tr.appendChild(el('td', null, TYPE_LABELS[c.link_type] || c.link_type));
+        tr.appendChild(el('td', { class: 'url' }, plaqueUrl(c.chip_id)));
+        var act = el('td', { class: 'actions' });
+        act.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function (e) {
+          var btn = e.currentTarget;
+          navigator.clipboard.writeText(plaqueUrl(c.chip_id)).then(function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500); });
+        } }, 'Copy'));
+        act.appendChild(document.createTextNode(' '));
+        // Preview what this plaque shows, without counting it as a guest tap.
+        var preview = houseUrl(p.property_id) + '?focus=' + encodeURIComponent(c.link_type) + '&preview=1';
+        var test = el('a', { class: 'btn small', href: preview, target: '_blank', rel: 'noopener', title: 'Preview what guests see (not counted as a tap)' }, 'Test');
+        act.appendChild(test);
+        act.appendChild(document.createTextNode(' '));
+        act.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function () { editing = { kind: 'chip', record: c }; renderHouseDetail(); } }, 'Edit'));
+        tr.appendChild(act);
+        t.appendChild(tr);
+        if (editing && editing.kind === 'chip' && editing.record === c) {
+          var er = el('tr'); var ed = el('td', { colspan: '4' }); ed.appendChild(chipEditor(p, c)); er.appendChild(ed); t.appendChild(er);
+        }
+      });
+      wrap.appendChild(t);
+      sec.appendChild(wrap);
+      return sec;
+    }
+
+    function typeOptions() {
+      return data.linkTypes.map(function (t) { return { value: t, label: TYPE_LABELS[t] || t }; });
+    }
+
+    function chipEditor(p, c) {
+      var wrap = el('div', { class: 'editor' });
+      var form = buildForm([
+        { name: 'spot', label: 'Spot in the house', value: c ? c.spot : '', placeholder: 'Kitchen' },
+        { name: 'link_type', label: 'Opens', type: 'select', options: typeOptions(), value: c ? c.link_type : 'rebook' },
+        { name: 'chip_id', label: 'Plaque ID', value: c ? c.chip_id : '', readonly: !!c,
+          hint: c ? 'Can’t be changed once a chip is written.' : 'Permanent; becomes part of the link.' },
+        { name: 'active', label: 'On (if off, the plaque says “not set up”)', type: 'checkbox', value: c ? c.active : true },
+      ], function (rec) {
+        rec.property_id = p.property_id;
+        if (c) rec.chip_id = c.chip_id;
+        return MTAuth.api('saveChip', { record: rec });
+      }, function () { editing = null; renderHouseDetail(); });
+      if (!c) {
+        var prefix = p.property_id.replace(/-\d+$/, '');
+        form.elements.spot.addEventListener('input', function () {
+          if (!form.elements.chip_id.dataset.touched) form.elements.chip_id.value = prefix + '-' + slug(form.elements.spot.value);
+        });
+        form.elements.chip_id.addEventListener('input', function () { this.dataset.touched = '1'; });
+      }
+      wrap.appendChild(form);
+      return wrap;
+    }
+
+    function linkSection(p) {
+      var sec = el('section', { class: 'card no-print' });
+      var head = el('div', { class: 'section-head' });
+      head.appendChild(el('h2', null, 'Guest page links'));
+      head.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function () { editing = { kind: 'link', record: null }; renderHouseDetail(); } }, '+ Add link'));
+      sec.appendChild(head);
+      sec.appendChild(el('p', { class: 'sub' }, 'One link per type. Mark a link as a placeholder until the real one is ready; guests see a “Demo placeholder” note.'));
+      if (editing && editing.kind === 'link' && !editing.record) sec.appendChild(linkEditor(p, null));
+
+      var links = data.links.filter(function (l) { return l.property_id === p.property_id; })
+        .sort(function (a, b) { return a.sort - b.sort; });
+      if (!links.length) { sec.appendChild(el('p', { class: 'muted' }, 'No links yet.')); return sec; }
+      var wrap = el('div', { class: 'scroll' });
+      var t = el('table', { class: 'rows' });
+      var hr = el('tr');
+      ['Link', 'Goes to', ''].forEach(function (h, i) { hr.appendChild(el('th', i === 2 ? { class: 'actions' } : null, h)); });
+      t.appendChild(hr);
+      links.forEach(function (l) {
+        var tr = el('tr');
+        var a = el('td');
+        a.appendChild(document.createTextNode(l.label + ' '));
+        a.appendChild(el('span', { class: 'badge' }, TYPE_LABELS[l.link_type] || l.link_type));
+        if (l.placeholder) { a.appendChild(document.createTextNode(' ')); a.appendChild(el('span', { class: 'badge warn' }, 'Placeholder')); }
+        if (l.details) a.appendChild(el('div', { class: 'hint' }, l.details));
+        tr.appendChild(a);
+        tr.appendChild(el('td', { class: 'url' }, l.url || '(no link, shows details only)'));
+        var act = el('td', { class: 'actions' });
+        act.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function () { editing = { kind: 'link', record: l }; renderHouseDetail(); } }, 'Edit'));
+        tr.appendChild(act);
+        t.appendChild(tr);
+        if (editing && editing.kind === 'link' && editing.record === l) {
+          var er = el('tr'); var ed = el('td', { colspan: '3' }); ed.appendChild(linkEditor(p, l)); er.appendChild(ed); t.appendChild(er);
+        }
+      });
+      wrap.appendChild(t);
+      sec.appendChild(wrap);
+      return sec;
+    }
+
+    function linkEditor(p, l) {
+      var wrap = el('div', { class: 'editor' });
+      wrap.appendChild(buildForm([
+        { name: 'link_type', label: 'Type', type: 'select', options: typeOptions(), value: l ? l.link_type : 'other', readonly: !!l },
+        { name: 'label', label: 'Label guests see', value: l ? l.label : '' },
+        { name: 'url', label: 'Web address (https://…)', value: l ? l.url : '', full: true, hint: 'Leave empty for info-only items like Wi-Fi.' },
+        { name: 'details', label: 'Details shown under the label', value: l ? l.details : '', full: true },
+        { name: 'sort', label: 'Order on the page', type: 'number', value: l ? l.sort : 9 },
+        { name: 'placeholder', label: 'Placeholder (shows a demo note to guests)', type: 'checkbox', value: l ? l.placeholder : false },
+      ], function (rec) {
+        rec.property_id = p.property_id;
+        if (l) rec.link_type = l.link_type;
+        return MTAuth.api('saveLink', { record: rec });
+      }, function () { editing = null; renderHouseDetail(); }, l ? function () {
+        if (!confirmInline(wrap, 'Remove the “' + l.label + '” link from this house?', function () {
+          MTAuth.api('deleteLink', { property_id: p.property_id, link_type: l.link_type }).then(function () { editing = null; load(true); });
+        })) return;
+      } : null));
+      return wrap;
+    }
+
+    // In-page confirmation (no browser pop-ups).
+    function confirmInline(container, text, onYes) {
+      var old = container.querySelector('.confirm');
+      if (old) old.remove();
+      var box = el('div', { class: 'note confirm' });
+      box.appendChild(document.createTextNode(text + ' '));
+      box.appendChild(el('button', { class: 'btn small danger', type: 'button', onclick: onYes }, 'Yes, remove'));
+      box.appendChild(document.createTextNode(' '));
+      box.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function () { box.remove(); } }, 'Keep'));
+      container.appendChild(box);
+      return false;
+    }
+
+    $('add-house').addEventListener('click', function () { editing = { kind: 'newHouse' }; renderHouseDetail(); });
+
+    /* ── People ── */
+    function renderPeople() {
+      var t = $('people-table');
+      t.textContent = '';
+      var hr = el('tr');
+      ['Name', 'Email', 'Role', 'Houses', ''].forEach(function (h, i) { hr.appendChild(el('th', i === 4 ? { class: 'actions' } : null, h)); });
+      t.appendChild(hr);
+      var names = {};
+      data.properties.forEach(function (p) { names[p.property_id] = p.name; });
+      data.users.forEach(function (u) {
+        var tr = el('tr');
+        tr.appendChild(el('td', null, u.name || '—'));
+        tr.appendChild(el('td', null, u.email));
+        tr.appendChild(el('td', null, u.role));
+        var houses = u.role === 'admin' ? 'All houses'
+          : u.property_ids.split(/[,\s]+/).filter(Boolean).map(function (id) { return names[id] || id; }).join(', ') || 'None yet';
+        tr.appendChild(el('td', null, houses));
+        var act = el('td', { class: 'actions' });
+        act.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function () { editing = { kind: 'user', record: u }; renderPeople(); } }, 'Edit'));
+        tr.appendChild(act);
+        t.appendChild(tr);
+      });
+      var ed = $('person-editor');
+      ed.textContent = '';
+      if (editing && editing.kind === 'user') ed.appendChild(personEditor(editing.record));
+    }
+
+    function personEditor(u) {
+      var wrap = el('div', { class: 'editor', style: 'margin-bottom:12px' });
+      wrap.appendChild(el('h2', null, u ? 'Edit ' + (u.name || u.email) : 'Add a person'));
+      var form = buildForm([
+        { name: 'name', label: 'Name', value: u ? u.name : '' },
+        { name: 'email', label: 'Google email', value: u ? u.email : '', readonly: !!u },
+        { name: 'role', label: 'Role', type: 'select', value: u ? u.role : 'owner', options: [
+          { value: 'owner', label: 'Owner: their houses, view only' },
+          { value: 'manager', label: 'Manager: assigned houses' },
+          { value: 'admin', label: 'Admin: everything' },
+        ] },
+      ], function (rec) {
+        if (u) rec.email = u.email;
+        rec.property_ids = Array.prototype.filter.call(wrap.querySelectorAll('input[name="house"]'), function (i) { return i.checked; })
+          .map(function (i) { return i.value; }).join(', ');
+        return MTAuth.api('saveUser', { record: rec });
+      }, function () { editing = null; renderPeople(); }, u ? function () {
+        confirmInline(wrap, 'Remove ' + u.email + '? They’ll lose dashboard access right away.', function () {
+          MTAuth.api('deleteUser', { email: u.email }).then(function (res) {
+            if (!res.ok) { wrap.querySelector('.form-msg').textContent = res.error; return; }
+            editing = null; load(true);
+          });
+        });
+      } : null);
+
+      // House checkboxes (hidden for admins, who see everything).
+      var current = u ? u.property_ids.split(/[,\s]+/).filter(Boolean) : [];
+      var houses = el('fieldset', { class: 'full', style: 'border:0;padding:0;margin:0' });
+      houses.appendChild(el('legend', { class: 'hint' }, 'Houses they can see'));
+      data.properties.forEach(function (p) {
+        var lab = el('label', { class: 'f check' });
+        var cb = el('input', { type: 'checkbox', name: 'house', value: p.property_id });
+        cb.checked = current.indexOf(p.property_id) >= 0;
+        lab.appendChild(cb);
+        lab.appendChild(document.createTextNode(p.name));
+        houses.appendChild(lab);
+      });
+      form.insertBefore(houses, form.querySelector('.form-actions'));
+      function syncRole() { houses.classList.toggle('hidden', form.elements.role.value === 'admin'); }
+      form.elements.role.addEventListener('change', syncRole);
+      syncRole();
+      wrap.appendChild(form);
+      return wrap;
+    }
+
+    $('add-person').addEventListener('click', function () { editing = { kind: 'user', record: null }; renderPeople(); });
+
+    // Who's signed in
+    MTAuth.api('me').then(function (d) {
+      if (d.ok) { $('who').textContent = d.user.name || d.user.email; if (d.user.role !== 'admin') location.replace('/dashboard.html'); }
+    });
+
+    load(false);
+  })();
+  </script>
+</body>
+</html>

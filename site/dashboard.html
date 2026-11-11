@@ -169,6 +169,13 @@
       $('who').textContent = '';
       $('who').appendChild(el('b', null, u.name || u.email));
       $('who').appendChild(el('span', 'role-pill', u.role));
+      if (u.role === 'admin' && !$('admin-link')) {
+        var a = el('a', 'linkbtn', 'Admin');
+        a.id = 'admin-link';
+        a.href = '/admin.html';
+        $('who').parentNode.insertBefore(a, $('who'));
+        $('who').parentNode.insertBefore(document.createTextNode(' · '), $('who'));
+      }
       $('title').textContent = u.role === 'owner' ? 'Your houses' : 'All houses';
       var t = data.totals;
       $('rebook-value').textContent = fmt(t.rebookTaps);
