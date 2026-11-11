@@ -6,10 +6,19 @@
   <meta name="robots" content="noindex">
   <title>Sign in · ModernTap Dashboard</title>
   <link rel="stylesheet" href="/css/dash.css">
+  <link rel="stylesheet" href="/css/beach.css">
+  <style>
+    .signin-scene { min-height: 46vh; }
+    .signin { margin: -18vh auto 0; position: relative; z-index: 2; background: var(--surface); border-radius: 22px;
+      padding: 28px 24px; box-shadow: 0 10px 40px rgba(11, 58, 83, 0.16); max-width: 420px; }
+    .signin .brand { font-weight: 700; color: #0b3a53; letter-spacing: 0.04em; text-transform: uppercase; font-size: 12px; }
+    @media (max-width: 480px) { .signin { margin-left: 12px; margin-right: 12px; } }
+  </style>
 </head>
 <body>
+  <div class="signin-scene" data-beach-scene></div>
   <main class="signin">
-    <div class="brand">ModernTap</div>
+    <div class="brand">ModernTap · Outer Banks</div>
     <h1>Owner &amp; manager dashboard</h1>
     <p>Sign in with the Google account ModernTap added for you.</p>
     <div id="gsi"></div>
@@ -17,6 +26,7 @@
     <div class="fine">Only accounts added by ModernTap can see property stats.</div>
   </main>
 
+  <script src="/js/beach.js"></script>
   <script src="/js/config.js"></script>
   <script src="/js/auth.js"></script>
   <script>

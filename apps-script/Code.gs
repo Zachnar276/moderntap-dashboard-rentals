@@ -128,7 +128,7 @@ function doGet(e) {
  *   { action: 'me' }
  *   { action: 'overview', days: 30 }
  *   { action: 'stats', property: 'ocd-001', days: 30 }
- *   admin only: adminData, saveProperty, saveChip, saveLink, deleteLink, saveUser, deleteUser
+ *   admin only: adminData, saveProperty, saveChip, deleteChip, saveLink, deleteLink, saveUser, deleteUser
  */
 function doPost(e) {
   try {
@@ -413,7 +413,7 @@ function getStats_(pid, days) {
     byType: s.byType,
     clicksByType: s.clicksByType,
     byChip: chips.map(function (c) {
-      return { chip_id: c.chip_id, spot: c.spot, link_type: c.link_type, taps: s.byChip[c.chip_id] || 0 };
+      return { chip_id: c.chip_id, spot: c.spot, link_type: c.link_type, active: isTrue_(c.active), taps: s.byChip[c.chip_id] || 0 };
     }),
     byDay: Object.keys(s.byDay).map(function (d) {
       return { date: d, taps: s.byDay[d].taps, rebook: s.byDay[d].rebook };
@@ -468,6 +468,7 @@ function adminAction_(user, body) {
       case 'deleteLink':   return deleteRows_('Links', function (r) {
         return String(r.property_id) === String(body.property_id) && String(r.link_type) === String(body.link_type);
       });
+      case 'deleteChip':   return deleteChip_(String(body.chip_id || ''));
       case 'saveUser':     return saveUser_(user, body.record || {});
       case 'deleteUser':   return deleteUser_(user, String(body.email || ''));
       default:             return { ok: false, error: 'Unknown action' };
@@ -478,13 +479,19 @@ function adminAction_(user, body) {
 }
 
 function adminData_() {
+  const tapCounts = {};
+  readTable_('Taps').forEach(function (t) {
+    const id = String(t.chip_id).toLowerCase();
+    tapCounts[id] = (tapCounts[id] || 0) + 1;
+  });
   return {
     ok: true,
     properties: readTable_('Properties').map(function (p) {
       return { property_id: String(p.property_id), name: p.name, address: p.address, tagline: p.tagline, active: isTrue_(p.active) };
     }),
     chips: readTable_('Chips').map(function (c) {
-      return { chip_id: String(c.chip_id), property_id: String(c.property_id), spot: c.spot, link_type: c.link_type, active: isTrue_(c.active) };
+      return { chip_id: String(c.chip_id), property_id: String(c.property_id), spot: c.spot, link_type: c.link_type,
+               active: isTrue_(c.active), taps: tapCounts[String(c.chip_id).toLowerCase()] || 0 };
     }),
     links: readTable_('Links').map(function (l) {
       return { property_id: String(l.property_id), link_type: l.link_type, label: l.label, url: l.url, details: l.details,
@@ -575,6 +582,14 @@ function saveChip_(r) {
   return upsertRow_('Chips', function (c) { return String(c.chip_id).toLowerCase() === id; }, {
     chip_id: id, property_id: pid, spot: cleanText_(r.spot, 80), link_type: r.link_type, active: r.active !== false,
   });
+}
+
+/** A plaque can only be deleted if it has never been tapped; otherwise turn it off so its history is kept. */
+function deleteChip_(chipId) {
+  const id = chipId.trim().toLowerCase();
+  const used = readTable_('Taps').some(function (t) { return String(t.chip_id).toLowerCase() === id; });
+  if (used) return fail_('This plaque has taps on record. Turn it off instead so its history is kept.');
+  return deleteRows_('Chips', function (c) { return String(c.chip_id).toLowerCase() === id; });
 }
 
 function saveLink_(r) {

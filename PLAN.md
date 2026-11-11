@@ -85,6 +85,20 @@ Plain HTML/CSS/JavaScript. No paid services.
   text that could act as a Sheet formula is escaped, and you can't remove your own admin access.
 - Sign-in is in Google "testing" mode: each person must also be added as a test user in Google Cloud.
 
+## Plaques (flexible by design)
+- Each plaque is one row in Chips, so a house can have any number (1, 4, 15…), set per house in Admin.
+- Plaque IDs are permanent (they're written on the chip). A plaque can be moved to a different spot
+  or changed to open a different link; past taps keep the link type they had when tapped.
+- Plaques with tap history can be turned off but not deleted, so stats stay accurate.
+  Never-tapped plaques can be deleted.
+- If a plaque opens a link type the house doesn't have, the guest sees the full list (Admin warns about it).
+
+## Design
+- Beachy Outer Banks look on every page (sky, sun, lighthouse, ocean, dunes, sea oats), drawn in `js/beach.js`.
+- A "Powered by ModernTap" blimp drifts across with a rotating cheeky line. Motion stops for people who
+  turn on "reduce motion".
+- Chart colors were re-checked for color-blind safety and contrast on the new sand/ocean backgrounds.
+
 ## Rebooking metric
 - **Now:** a rebooking = a tap on a chip with `link_type = rebook`.
   Shown as the biggest number on every dashboard view, with a trend over time.

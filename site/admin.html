@@ -6,6 +6,7 @@
   <meta name="robots" content="noindex">
   <title>Admin · ModernTap</title>
   <link rel="stylesheet" href="/css/dash.css">
+  <link rel="stylesheet" href="/css/beach.css">
   <style>
     main { max-width: 1040px; }
     .tabs { display: flex; gap: 6px; margin: 4px 0 16px; }
@@ -54,7 +55,7 @@
     .editor { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--grid); }
     .scroll { overflow-x: auto; }
     @media print {
-      .topbar, .tabs, .house-list, .btn, .editor, .back, #people-panel, .no-print, td.actions, th.actions { display: none !important; }
+      .beach-head, .topbar, .tabs, .house-list, .btn, .editor, .back, #people-panel, .no-print, td.actions, th.actions { display: none !important; }
       .layout { display: block; }
       .card { border: 0; box-shadow: none; }
       body { background: #fff; }
@@ -62,13 +63,17 @@
   </style>
 </head>
 <body>
-  <main>
-    <div class="topbar">
-      <div class="brand">ModernTap · Admin</div>
-      <div class="who"><span id="who"></span> · <button class="linkbtn" id="signout" type="button">Sign out</button></div>
+  <header class="beach-head" data-beach-scene>
+    <div class="inner">
+      <div class="bh-bar">
+        <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9a8 8 0 0 1 12 0"/><path d="M8.5 12a4.5 4.5 0 0 1 7 0"/><circle cx="12" cy="16" r="1.6" fill="currentColor" stroke="none"/></svg>ModernTap <small>· Outer Banks</small></span>
+        <div class="who"><span id="who"></span> · <button class="linkbtn" id="signout" type="button">Sign out</button></div>
+      </div>
+      <a class="back" href="/dashboard.html">← Dashboard</a>
+      <h1>Admin</h1>
     </div>
-    <a class="back" href="/dashboard.html">← Dashboard</a>
-    <h1>Admin</h1>
+  </header>
+  <main>
 
     <div class="tabs filters" role="tablist">
       <button type="button" role="tab" data-tab="houses" aria-pressed="true">Houses &amp; plaques</button>
@@ -105,6 +110,7 @@
     </div>
   </main>
 
+  <script src="/js/beach.js"></script>
   <script src="/js/config.js"></script>
   <script src="/js/auth.js"></script>
   <script>
@@ -306,7 +312,11 @@
       hb.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function () { editing = { kind: 'chip', record: null }; renderHouseDetail(); } }, '+ Add plaque'));
       head.appendChild(hb);
       sec.appendChild(head);
-      sec.appendChild(el('p', { class: 'sub' }, 'Write each plaque’s link onto its NFC chip. Tapping it opens this house’s guest page with that plaque’s link on top.'));
+      var all = data.chips.filter(function (c) { return c.property_id === p.property_id; });
+      var on = all.filter(function (c) { return c.active; }).length;
+      sec.appendChild(el('p', { class: 'sub' }, all.length + ' plaque' + (all.length === 1 ? '' : 's') + ' (' + on + ' on). ' +
+        'Write each plaque’s link onto its NFC chip. Tapping it opens this house’s guest page with that plaque’s link on top. ' +
+        'Add as many as the house needs; plaques with tap history can be turned off but not deleted, so the numbers stay accurate.'));
 
       if (editing && editing.kind === 'chip' && !editing.record) sec.appendChild(chipEditor(p, null));
 
@@ -322,9 +332,15 @@
         var spot = el('td');
         spot.appendChild(document.createTextNode(c.spot || c.chip_id));
         if (!c.active) { spot.appendChild(document.createTextNode(' ')); spot.appendChild(el('span', { class: 'badge off' }, 'Off')); }
-        spot.appendChild(el('div', { class: 'hint' }, c.chip_id));
+        spot.appendChild(el('div', { class: 'hint' }, c.chip_id + ' · ' + c.taps + ' tap' + (c.taps === 1 ? '' : 's') + ' all time'));
         tr.appendChild(spot);
-        tr.appendChild(el('td', null, TYPE_LABELS[c.link_type] || c.link_type));
+        var hasLink = data.links.some(function (l) { return l.property_id === p.property_id && l.link_type === c.link_type; });
+        var opens = el('td', null, TYPE_LABELS[c.link_type] || c.link_type);
+        if (!hasLink) {
+          opens.appendChild(el('div', { class: 'hint', style: 'color:#9a6b00' },
+            'No ' + (TYPE_LABELS[c.link_type] || c.link_type) + ' link for this house yet. Guests will see the full list instead.'));
+        }
+        tr.appendChild(opens);
         tr.appendChild(el('td', { class: 'url' }, plaqueUrl(c.chip_id)));
         var act = el('td', { class: 'actions' });
         act.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function (e) {
@@ -365,7 +381,18 @@
         rec.property_id = p.property_id;
         if (c) rec.chip_id = c.chip_id;
         return MTAuth.api('saveChip', { record: rec });
-      }, function () { editing = null; renderHouseDetail(); });
+      }, function () { editing = null; renderHouseDetail(); }, c && c.taps === 0 ? function () {
+        confirmInline(wrap, 'Delete the “' + (c.spot || c.chip_id) + '” plaque? It has never been tapped.', function () {
+          MTAuth.api('deleteChip', { chip_id: c.chip_id }).then(function (res) {
+            if (!res.ok) { wrap.querySelector('.form-msg').textContent = res.error; return; }
+            editing = null; load(true);
+          });
+        });
+      } : null);
+      if (c && c.taps > 0) {
+        form.querySelector('.form-actions').appendChild(el('span', { class: 'hint' },
+          'Has ' + c.taps + ' taps, so it can be turned off but not deleted. Changing what it opens keeps its past taps as they were.'));
+      }
       if (!c) {
         var prefix = p.property_id.replace(/-\d+$/, '');
         form.elements.spot.addEventListener('input', function () {
