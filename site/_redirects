@@ -1,0 +1,2 @@
+# Chip links: /t/CHIP_ID shows the tap page (address bar keeps /t/CHIP_ID)
+/t/*    /tap.html    200
