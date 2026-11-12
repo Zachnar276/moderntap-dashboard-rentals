@@ -268,3 +268,4 @@ table.cmp .win { font-weight: 700; }
 .btn-small { font: inherit; font-weight: 600; font-size: 14px; padding: 6px 14px; border-radius: 8px; border: 0; background: var(--series-rebook); color: #fff; cursor: pointer; }
 .btn-small:disabled { opacity: 0.6; }
 .hidden { display: none !important; }
+.report-link { font-weight: 600; font-size: 14px; margin-left: auto; margin-right: 14px; text-decoration: none; }

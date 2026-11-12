@@ -258,6 +258,20 @@
       try { fetch(url, { keepalive: true, mode: 'no-cors' }); } catch (e) { /* never block the guest */ }
     }
 
+    // Our own how-to page: pass the plaque along so it can ask "Did this solve it?" and open that guide first.
+    function linkUrl(link) {
+      var u = link.url;
+      try {
+        var x = new URL(u, location.href);
+        if (x.origin === location.origin && x.pathname === '/howto.html') {
+          if (house.chip && house.focus === 'howto') x.searchParams.set('chip', house.chip);
+          if (isPreview) x.searchParams.set('preview', '1');
+          return x.pathname + x.search;
+        }
+      } catch (e) {}
+      return u;
+    }
+
     function renderPrimary(link) {
       var box = $('primary');
       box.textContent = '';
@@ -267,7 +281,7 @@
       if (link.url) {
         if (link.details) box.appendChild(el('p', null, link.details));
         var a = el('a', link.type === 'rebook' ? 'btn coral' : 'btn');
-        a.href = link.url;
+        a.href = linkUrl(link);
         a.rel = 'noopener';
         a.appendChild(document.createTextNode(link.type === 'rebook' ? 'Choose your dates' : 'Open'));
         var arrow = el('span'); arrow.innerHTML = ARROW; a.appendChild(arrow.firstChild);
@@ -336,7 +350,7 @@
       links.forEach(function (link) {
         var row = el(link.url ? 'a' : 'div', 'item');
         if (link.url) {
-          row.href = link.url;
+          row.href = linkUrl(link);
           row.rel = 'noopener';
           row.addEventListener('click', function () { logClick(link.type); });
         }

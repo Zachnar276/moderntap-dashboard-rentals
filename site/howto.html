@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#3f8ee0">
+  <title>How-to guides · ModernTap</title>
+  <style>
+    :root { --ocean:#0b3a53; --ocean-2:#16607f; --sea:#2a8fb4; --coral:#c2502a; --sand:#f6efe3; --card:#fff;
+            --ink:#14212b; --ink-2:#4b5862; --ink-3:#7c8790; --line:#e7e0d2; --note-bg:#fff6e0; --note-ink:#7a5a12; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body { background: var(--sand); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+    header.hero { min-height: 250px; padding: 0 20px 96px; color: #fff; }
+    .mt-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 560px; margin: 0 auto; padding: 14px 0 0; font-size: 13px; }
+    .mt-logo { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #fff; }
+    .mt-logo svg { width: 18px; height: 18px; }
+    .mt-bar a { color: var(--ocean); text-decoration: none; background: rgba(255,255,255,.75); padding: 4px 10px; border-radius: 999px; font-weight: 600; }
+    .hero-text { max-width: 560px; margin: 40px auto 0; }
+    .welcome { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #e3f0fb; margin: 0 0 4px; text-shadow: 0 1px 8px rgba(6,40,70,.35); }
+    h1 { font-size: 30px; line-height: 1.15; margin: 0; font-weight: 800; text-shadow: 0 1px 14px rgba(6,40,70,.4); }
+    main { max-width: 560px; margin: -64px auto 0; padding: 0 16px 32px; position: relative; z-index: 2; }
+    .card { background: var(--card); border-radius: 20px; padding: 6px 18px; margin-bottom: 14px;
+            box-shadow: 0 1px 2px rgba(20,33,43,.06), 0 8px 24px rgba(20,33,43,.06); }
+    .note { display: block; font-size: 13px; background: var(--note-bg); color: var(--note-ink); padding: 8px 12px; border-radius: 10px; margin: 12px 0; }
+    details { border-top: 1px solid var(--line); }
+    details:first-of-type { border-top: 0; }
+    summary { list-style: none; cursor: pointer; padding: 16px 0; font-weight: 700; font-size: 18px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; font-size: 24px; font-weight: 400; color: var(--ink-3); }
+    details[open] summary::after { content: "–"; }
+    .intro { margin: 0 0 10px; color: var(--ink-2); }
+    ol { margin: 0 0 12px; padding-left: 22px; }
+    ol li { margin: 0 0 8px; }
+    .safety { background: #eef6fa; border-radius: 12px; padding: 10px 12px; font-size: 14px; color: var(--ink); margin-bottom: 16px; }
+    .safety b { color: var(--ocean-2); }
+    .survey h3, .help h3 { font-size: 16px; margin: 14px 0 4px; }
+    .survey p, .help p { margin: 0 0 12px; color: var(--ink-2); font-size: 14px; }
+    .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+    .choices button { font: inherit; font-weight: 600; font-size: 15px; padding: 12px 10px; border-radius: 12px; cursor: pointer;
+                      border: 1.5px solid var(--line); background: var(--sand); color: var(--ink); }
+    .thanks { font-weight: 600; color: var(--ocean-2); margin: 14px 0; }
+    .help a { display: inline-block; margin: 0 14px 14px 0; font-weight: 600; color: var(--ocean-2); }
+    .back { display: block; text-align: center; margin: 4px 0 0; color: var(--ocean-2); font-weight: 600; text-decoration: none; }
+    footer { text-align: center; color: var(--ink-3); font-size: 12px; padding: 8px 16px 28px; }
+    .hidden { display: none !important; }
+  </style>
+  <link rel="stylesheet" href="/css/beach.css">
+</head>
+<body>
+  <header class="hero" data-beach-scene>
+    <div class="mt-bar">
+      <span class="mt-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9a8 8 0 0 1 12 0"/><path d="M8.5 12a4.5 4.5 0 0 1 7 0"/><circle cx="12" cy="16" r="1.6" fill="currentColor" stroke="none"/></svg>ModernTap</span>
+      <a id="back-top" href="#">← Back</a>
+    </div>
+    <div class="hero-text">
+      <p class="welcome">How-to guides</p>
+      <h1 id="name">&nbsp;</h1>
+    </div>
+  </header>
+  <main>
+    <section class="card" id="guides">
+      <span class="note">General instructions. Equipment varies by house, so check any labels on the equipment itself.</span>
+    </section>
+    <section class="card survey hidden" id="survey" aria-live="polite"></section>
+    <section class="card help" id="help">
+      <h3>Still stuck?</h3>
+      <p>Twiddy’s guest services team can help.</p>
+      <div id="help-links"></div>
+    </section>
+    <a class="back" id="back" href="#">← Back to the house page</a>
+  </main>
+  <footer>ModernTap · Smart plaques for Outer Banks vacation rentals · <a href="/privacy.html">Privacy</a></footer>
+
+  <script src="/js/beach.js"></script>
+  <script src="/js/config.js"></script>
+  <script src="/js/guides.js"></script>
+  <script>
+  (function () {
+    var cfg = window.MODERNTAP, G = window.MTGuides;
+    function $(id) { return document.getElementById(id); }
+    function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+    var q = new URLSearchParams(location.search);
+    var pid = /^[a-z0-9-]{1,40}$/i.test(q.get('p') || '') ? q.get('p') : '';
+    var chip = /^[a-z0-9-]{1,40}$/i.test(q.get('chip') || '') ? q.get('chip') : '';
+    var isPreview = q.get('preview') === '1';
+    var houseUrl = pid ? '/h/' + encodeURIComponent(pid) : '/';
+    // Back goes to the house page (/h/), never the plaque link (/t/), so it doesn't count another tap.
+    $('back').href = $('back-top').href = houseUrl;
+
+    var ua = navigator.userAgent;
+    var device = /iPad|Tablet/i.test(ua) || (/Android/i.test(ua) && !/Mobile/i.test(ua)) ? 'tablet' : /Mobi|iPhone|Android/i.test(ua) ? 'phone' : 'desktop';
+    var visitor = ''; try { visitor = localStorage.getItem('mt_v') || ''; } catch (e) {}
+
+    // Guides: the plaque's topic opens first.
+    var topics = G.topicsFor(pid);
+    var first = chip ? G.CHIP_TOPIC[chip.split('-').slice(1).join('-')] : null;
+    if (first && topics.indexOf(first) > 0) topics = [first].concat(topics.filter(function (t) { return t !== first; }));
+    topics.forEach(function (key, i) {
+      var t = G.TOPICS[key]; if (!t) return;
+      var d = el('details'); d.id = key;
+      if (i === 0) d.open = true;
+      d.appendChild(el('summary', null, t.title));
+      d.appendChild(el('p', 'intro', t.intro));
+      var ol = el('ol'); t.steps.forEach(function (s) { ol.appendChild(el('li', null, s)); }); d.appendChild(ol);
+      var sf = el('div', 'safety'); sf.appendChild(el('b', null, 'Good to know: ')); sf.appendChild(document.createTextNode(t.safety)); d.appendChild(sf);
+      $('guides').appendChild(d);
+    });
+
+    // Guest services contact
+    var s = cfg.SUPPORT || {};
+    function link(text, href) { var a = el('a', null, text); a.href = href; $('help-links').appendChild(a); }
+    if (s.phone) link('Call ' + s.phone, 'tel:+1' + s.phone.replace(/\D/g, ''));
+    if (s.text) link('Text ' + s.text, 'sms:+1' + s.text.replace(/\D/g, ''));
+
+    // "Did this solve it?" when the guest came from a how-to plaque (same answer key as the house page, so it's asked once).
+    if (chip) {
+      var box = $('survey'), key = 'mt_s_' + chip, answered = null;
+      try { answered = sessionStorage.getItem(key); } catch (e) {}
+      if (!answered) {
+        box.appendChild(el('h3', null, 'Did this solve it?'));
+        box.appendChild(el('p', null, 'One tap helps the homeowner keep these guides useful.'));
+        var row = el('div', 'choices');
+        [['solved', 'I figured it out'], ['needs_help', 'I still need help']].forEach(function (c) {
+          var b = el('button', null, c[1]); b.type = 'button';
+          b.addEventListener('click', function () {
+            if (!isPreview) {
+              try { fetch(cfg.API_URL + '?action=survey&chip=' + encodeURIComponent(chip) + '&answer=' + c[0] + '&d=' + device + '&v=' + encodeURIComponent(visitor), { keepalive: true, mode: 'no-cors' }); } catch (e) {}
+            }
+            try { sessionStorage.setItem(key, c[0]); } catch (e) {}
+            box.textContent = '';
+            box.appendChild(el('p', 'thanks', c[0] === 'solved' ? 'Great, enjoy your stay!' : 'Sorry about that. Guest services can help — see below.'));
+          });
+          row.appendChild(b);
+        });
+        box.appendChild(row);
+        box.classList.remove('hidden');
+      }
+    }
+
+    // House name (this request never logs a tap)
+    if (pid) {
+      fetch(cfg.API_URL + '?action=house&property=' + encodeURIComponent(pid))
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d.ok) { $('name').textContent = d.property.name; document.title = 'How-to guides · ' + d.property.name; } })
+        .catch(function () {});
+    }
+    if (!pid) $('name').textContent = 'Around the house';
+  })();
+  </script>
+</body>
+</html>

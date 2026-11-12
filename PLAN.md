@@ -131,6 +131,10 @@ Plain HTML/CSS/JavaScript. No paid services.
 - Guest self-help: "Did this solve it?" on help plaques; per-house summary for everyone, and a
   Twiddy panel ("possible work orders avoided") on the overview for Twiddy and admins.
 - Admin "View as": read-only preview of any person's dashboard, with a banner.
+- How-to guides (`howto.html?p=HOUSE`, content in `js/guides.js`): general hot tub / TV / thermostat / laundry /
+  elevator steps per house. A how-to plaque opens its own guide first and asks "Did this solve it?" there too.
+  Confirm each house's real equipment and edit `HOUSE_TOPICS` before plaques go in.
+- Owner report (`report.html`): one-page printable summary per owner (Print / Save as PDF), linked from the dashboard.
 - Guest privacy page (`privacy.html`), linked from guest pages and sign-in. Not legal advice; have it reviewed.
 
 ## Rebooking metric
