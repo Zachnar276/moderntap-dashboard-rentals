@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#7fc8e2">
+  <meta name="theme-color" content="#3f8ee0">
   <title>Welcome · ModernTap</title>
   <style>
     :root {
@@ -31,20 +31,21 @@
     a { color: inherit; }
 
     /* Hero: Outer Banks scene (drawn by beach.js) with the house name over the sky */
-    header.hero { min-height: 340px; padding: 0 20px 110px; color: var(--ocean); }
+    header.hero { min-height: 360px; padding: 0 20px 118px; color: #ffffff; }
     .mt-bar {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
       max-width: 520px; margin: 0 auto; padding: 14px 0 0; font-size: 13px;
     }
-    .mt-logo { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: 0.01em; }
+    .mt-logo { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: 0.01em; color: #ffffff; }
     .mt-logo svg { width: 18px; height: 18px; }
     .mt-bar a { color: var(--ocean); text-decoration: none; white-space: nowrap; background: rgba(255,255,255,0.72); padding: 4px 10px; border-radius: 999px; font-weight: 600; }
     .mt-bar a:hover { text-decoration: underline; }
     .hero-text { max-width: 520px; margin: 64px auto 0; }
-    .welcome { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #1f5d78; margin: 0 0 4px; }
-    h1 { font-size: 32px; line-height: 1.1; margin: 0 0 6px; font-weight: 800; letter-spacing: -0.015em; text-shadow: 0 1px 0 rgba(255,255,255,0.7); }
-    .tagline { margin: 0; color: #24526a; font-size: 15px; font-weight: 500; }
+    .welcome { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #e3f0fb; margin: 0 0 4px; text-shadow: 0 1px 8px rgba(6, 40, 70, 0.35); }
+    h1 { font-size: 32px; line-height: 1.1; margin: 0 0 6px; font-weight: 800; letter-spacing: -0.015em; text-shadow: 0 1px 14px rgba(6, 40, 70, 0.4); }
+    .tagline { margin: 0; color: #f2f8fd; font-size: 15px; font-weight: 500; text-shadow: 0 1px 8px rgba(6, 40, 70, 0.4); }
     .tagline:empty { display: none; }
+    @media (max-width: 600px) { header.hero { min-height: 420px; } .hero-text { margin-top: 52px; } }
 
     main { max-width: 520px; margin: -76px auto 0; padding: 0 16px 32px; position: relative; z-index: 2; }
 

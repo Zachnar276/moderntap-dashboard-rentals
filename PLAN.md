@@ -94,7 +94,8 @@ Plain HTML/CSS/JavaScript. No paid services.
 - If a plaque opens a link type the house doesn't have, the guest sees the full list (Admin warns about it).
 
 ## Design
-- Beachy Outer Banks look on every page (sky, sun, lighthouse, ocean, dunes, sea oats), drawn in `js/beach.js`.
+- Beachy Outer Banks look on every page: background illustration in `site/img/obx-*` (wide, 1400px and a phone
+  crop, WebP + JPEG fallbacks, 41–155 KB), set in `css/beach.css`. Image made by Zach with ChatGPT.
 - A "Powered by ModernTap" blimp drifts across with a rotating cheeky line. Motion stops for people who
   turn on "reduce motion".
 - Chart colors were re-checked for color-blind safety and contrast on the new sand/ocean backgrounds.
