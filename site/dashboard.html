@@ -21,10 +21,15 @@
   </header>
   <main>
 
-    <div class="filters" role="group" aria-label="Date range">
-      <button type="button" data-days="7">7 days</button>
-      <button type="button" data-days="30">30 days</button>
-      <button type="button" data-days="90">90 days</button>
+    <div class="controls">
+      <div class="filters" role="group" aria-label="Date range">
+        <button type="button" data-days="7">7 days</button>
+        <button type="button" data-days="30">30 days</button>
+        <button type="button" data-days="90">90 days</button>
+      </div>
+      <label class="switch">House
+        <select data-house-switcher data-current="all" disabled><option>Loading…</option></select>
+      </label>
     </div>
 
     <p id="status" class="status">Loading…</p>
@@ -56,6 +61,26 @@
         </section>
       </div>
 
+      <section class="card" id="breakdown">
+        <div class="section-head" style="flex-wrap:wrap">
+          <div>
+            <h2>Where the numbers come from</h2>
+            <p class="sub" id="bd-sub" style="margin:0">Each house’s share of the total</p>
+          </div>
+          <div class="seg-tabs" role="group" aria-label="Breakdown measure">
+            <button type="button" data-bd="rebookTaps" aria-pressed="true">Rebooking taps</button>
+            <button type="button" data-bd="rebookClicks" aria-pressed="false">Potential rebooks</button>
+            <button type="button" data-bd="types" aria-pressed="false">All taps, by plaque type</button>
+          </div>
+        </div>
+        <div class="bd-legend hidden" id="bd-legend"></div>
+        <div id="bd-rows"></div>
+        <details>
+          <summary>Show as table</summary>
+          <div class="table-wrap"><table id="bd-table"></table></div>
+        </details>
+      </section>
+
       <div class="sort-row">
         <h2>Houses</h2>
         <label>Sort by
@@ -76,6 +101,7 @@
   <script src="/js/beach.js"></script>
   <script src="/js/config.js"></script>
   <script src="/js/auth.js"></script>
+  <script src="/js/switcher.js"></script>
   <script src="/js/defs.js"></script>
   <script>
   (function () {
@@ -199,6 +225,84 @@
       });
     }
 
+    /* ── Where the numbers come from: each house's share, or its taps split by plaque type ── */
+    var TYPES = ['rebook', 'wifi', 'guide', 'review', 'local', 'other'];
+    var TYPE_LABELS = { rebook: 'Rebooking', wifi: 'Wi-Fi', guide: 'Guidebook', review: 'Review', local: 'Local tips', other: 'Other' };
+    var bdMode = 'rebookTaps';
+
+    function renderBreakdown() {
+      var rows = $('bd-rows'), table = $('bd-table'), legend = $('bd-legend');
+      rows.textContent = ''; table.textContent = ''; legend.textContent = '';
+      var houses = current.houses;
+      var typed = bdMode === 'types';
+      var value = function (h) { return typed ? h.totalTaps : h[bdMode]; };
+      var total = houses.reduce(function (n, h) { return n + value(h); }, 0);
+      var max = Math.max.apply(null, houses.map(value).concat([1]));
+      $('bd-sub').textContent = typed
+        ? 'Every tap at each house, split by what the plaque opens'
+        : 'Each house’s share of ' + fmt(total) + ' ' + (bdMode === 'rebookTaps' ? 'rebooking taps' : 'potential rebooks (clicks)');
+      // Only show plaque types that actually have taps, in the fixed color order.
+      var usedTypes = TYPES.filter(function (t) { return houses.some(function (h) { return h.byType && h.byType[t] > 0; }); });
+      legend.classList.toggle('hidden', !typed);
+      if (typed) usedTypes.forEach(function (t) {
+        var sp = el('span', null, TYPE_LABELS[t]); sp.style.setProperty('--swatch', 'var(--type-' + t + ')'); legend.appendChild(sp);
+      });
+
+      houses.slice().sort(function (a, b) { return value(b) - value(a); }).forEach(function (h) {
+        var row = el('div', 'bd-row');
+        var name = el('a', 'bd-name', h.name);
+        name.href = '/property.html?p=' + encodeURIComponent(h.id) + '&days=' + days;
+        row.appendChild(name);
+        var track = el('div', 'bd-track');
+        track.style.width = 'calc(100% * ' + (value(h) / max) + ')';
+        if (typed) {
+          usedTypes.filter(function (t) { return h.byType[t] > 0; }).forEach(function (t) {
+            var seg = el('div', 'bd-seg');
+            seg.style.background = 'var(--type-' + t + ')';
+            seg.style.flex = h.byType[t] + ' 1 0';
+            seg.title = TYPE_LABELS[t] + ': ' + fmt(h.byType[t]) + ' taps';
+            track.appendChild(seg);
+          });
+        } else if (value(h) > 0) {
+          var seg = el('div', 'bd-seg');
+          seg.style.background = 'var(--series-rebook)';
+          seg.style.flex = '1 1 0';
+          track.appendChild(seg);
+        }
+        row.appendChild(track);
+        var v = el('div', 'bd-val', fmt(value(h)));
+        if (!typed && total) v.appendChild(el('small', null, Math.round((value(h) / total) * 100) + '%'));
+        row.appendChild(v);
+        row.setAttribute('aria-label', h.name + ': ' + fmt(value(h)) + (typed ? ' taps: ' +
+          usedTypes.map(function (t) { return TYPE_LABELS[t] + ' ' + (h.byType[t] || 0); }).join(', ') : ''));
+        rows.appendChild(row);
+      });
+
+      // Table view (every value, no hovering needed)
+      var head = el('tr');
+      head.appendChild(el('th', null, 'House'));
+      (typed ? usedTypes.map(function (t) { return TYPE_LABELS[t]; }).concat(['Total']) : ['Count', 'Share']).forEach(function (c) {
+        var th = el('th', null, c); th.className = 'n'; head.appendChild(th);
+      });
+      table.appendChild(head);
+      houses.forEach(function (h) {
+        var tr = el('tr');
+        tr.appendChild(el('td', null, h.name));
+        var cells = typed ? usedTypes.map(function (t) { return fmt(h.byType[t] || 0); }).concat([fmt(h.totalTaps)])
+          : [fmt(value(h)), total ? Math.round((value(h) / total) * 100) + '%' : '–'];
+        cells.forEach(function (c) { var td = el('td', null, c); td.className = 'n'; tr.appendChild(td); });
+        table.appendChild(tr);
+      });
+    }
+
+    document.querySelectorAll('[data-bd]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        bdMode = b.dataset.bd;
+        document.querySelectorAll('[data-bd]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+        if (current) renderBreakdown();
+      });
+    });
+
     function render(data) {
       current = data;
       var u = data.user;
@@ -234,6 +338,9 @@
       $('status').classList.add('hidden');
       $('content').classList.remove('hidden');
       renderHouses();
+      renderBreakdown();
+      MTSwitcher.populate(data.houses.map(function (h) { return { id: h.id, name: h.name }; }));
+      $('breakdown').classList.toggle('hidden', data.houses.length < 2);
     }
 
     function load() {

@@ -106,6 +106,9 @@ Plain HTML/CSS/JavaScript. No paid services.
 - Plaque health on each house: Working / Not being used / Low use / New / Off, with last-tap date.
   Rules live at the top of the Plaque health section in Code.gs (14-day window, quarter-of-median).
 - "What guests open": link presses per guest-page link.
+- House switcher on every dashboard page (All houses + each house), keeps the date range.
+- "Where the numbers come from" on the overview: each house's share of rebooking taps / potential rebooks,
+  or all taps split by plaque type (validated 6-color order, legend + table view).
 - Demo-data banner whenever demo taps are in the period.
 - Guest privacy page (`privacy.html`), linked from guest pages and sign-in. Not legal advice; have it reviewed.
 

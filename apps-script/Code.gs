@@ -127,6 +127,7 @@ function doGet(e) {
  * not the address, so it never shows up in logs or browser history.
  *   { action: 'me' }
  *   { action: 'overview', days: 30 }
+ *   { action: 'houses' }                       list of houses this user can see (for the house switcher)
  *   { action: 'stats', property: 'ocd-001', days: 30 }
  *   admin only: adminData, saveProperty, saveChip, deleteChip, saveLink, deleteLink, saveUser, deleteUser
  */
@@ -142,6 +143,11 @@ function doPost(e) {
         return json_({ ok: true, user: publicUser_(user) });
       case 'overview':
         return json_(getOverview_(user, days));
+      case 'houses':
+        return json_({ ok: true, user: publicUser_(user), houses: readTable_('Properties')
+          .filter(function (p) { return user.propertyIds.indexOf(String(p.property_id)) >= 0; })
+          .map(function (p) { return { id: String(p.property_id), name: p.name }; })
+          .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); }) });
       case 'stats':
         if (user.propertyIds.indexOf(String(body.property)) < 0) {
           return json_({ ok: false, error: 'no_access' });
@@ -506,6 +512,8 @@ function getOverview_(user, days) {
       rebookClicks: s.rebookClicks,
       prevRebookClicks: s.prevRebookClicks,
       daily: sum.dayList.map(function (d) { return s.byDay[d].taps; }),
+      byType: s.byType,
+      clicksByType: s.clicksByType,
       plaques: health.filter(function (h) { return h.active; }).length,
       alerts: health.filter(function (h) { return h.status === 'silent' || h.status === 'low'; })
         .map(function (h) { return { spot: h.spot || h.chip_id, status: h.status }; }),
