@@ -113,13 +113,16 @@
   <script src="/js/beach.js"></script>
   <script src="/js/config.js"></script>
   <script src="/js/auth.js"></script>
+  <script src="/js/types.js"></script>
   <script>
   (function () {
     if (!MTAuth.requireSignIn()) return;
     $('signout').addEventListener('click', MTAuth.signOut);
+    MTAuth.setViewAs('');   // Admin always runs as yourself; "View as" previews only apply to dashboard pages.
 
-    var TYPE_LABELS = { rebook: 'Rebooking', wifi: 'Wi-Fi', guide: 'Guidebook', review: 'Review', local: 'Local tips', other: 'Other' };
+    var TYPE_LABELS = MTTypes.LABELS;
     var data = null;
+    var myEmail = '';
     var selected = null;          // property_id
     var editing = null;           // { kind, record } currently open editor
 
@@ -280,6 +283,7 @@
         { name: 'property_id', label: 'House ID', value: p ? p.property_id : '', readonly: !!p,
           hint: p ? 'Can’t be changed (it’s part of the plaque links).' : 'Short and permanent, e.g. ssc-001' },
         { name: 'address', label: 'Address', value: p ? p.address : '' },
+        { name: 'area', label: 'Area (town)', value: p ? p.area : '', placeholder: 'Duck', hint: 'Groups houses on the dashboard, e.g. Duck or Corolla.' },
         { name: 'tagline', label: 'Short description (shown to guests)', value: p ? p.tagline : '', full: true,
           placeholder: 'Oceanfront in Duck · 8 bedrooms · Sleeps 22' },
         { name: 'active', label: 'Visible on the dashboard and guest page', type: 'checkbox', value: p ? p.active : true },
@@ -493,11 +497,16 @@
         tr.appendChild(el('td', null, u.name || '—'));
         tr.appendChild(el('td', null, u.email));
         tr.appendChild(el('td', null, u.role));
-        var houses = u.role === 'admin' ? 'All houses'
+        var houses = u.role === 'admin' || u.role === 'twiddy' ? 'All houses'
           : u.property_ids.split(/[,\s]+/).filter(Boolean).map(function (id) { return names[id] || id; }).join(', ') || 'None yet';
         tr.appendChild(el('td', null, houses));
         var act = el('td', { class: 'actions' });
         act.appendChild(el('button', { class: 'btn small', type: 'button', onclick: function () { editing = { kind: 'user', record: u }; renderPeople(); } }, 'Edit'));
+        if (u.email !== myEmail) {
+          act.appendChild(document.createTextNode(' '));
+          act.appendChild(el('button', { class: 'btn small', type: 'button', title: 'Read-only preview of what ' + (u.name || u.email) + ' sees',
+            onclick: function () { MTAuth.setViewAs(u.email); location.href = '/dashboard.html'; } }, 'View as'));
+        }
         tr.appendChild(act);
         t.appendChild(tr);
       });
@@ -515,6 +524,7 @@
         { name: 'role', label: 'Role', type: 'select', value: u ? u.role : 'owner', options: [
           { value: 'owner', label: 'Owner: their houses, view only' },
           { value: 'manager', label: 'Manager: assigned houses' },
+          { value: 'twiddy', label: 'Twiddy: every house, view only, plus self-help numbers' },
           { value: 'admin', label: 'Admin: everything' },
         ] },
       ], function (rec) {
@@ -544,7 +554,7 @@
         houses.appendChild(lab);
       });
       form.insertBefore(houses, form.querySelector('.form-actions'));
-      function syncRole() { houses.classList.toggle('hidden', form.elements.role.value === 'admin'); }
+      function syncRole() { var r = form.elements.role.value; houses.classList.toggle('hidden', r === 'admin' || r === 'twiddy'); }
       form.elements.role.addEventListener('change', syncRole);
       syncRole();
       wrap.appendChild(form);
@@ -555,7 +565,7 @@
 
     // Who's signed in
     MTAuth.api('me').then(function (d) {
-      if (d.ok) { $('who').textContent = d.user.name || d.user.email; if (d.user.role !== 'admin') location.replace('/dashboard.html'); }
+      if (d.ok) { myEmail = d.user.email; if (data) renderPeople(); $('who').textContent = d.user.name || d.user.email; if (d.user.role !== 'admin') location.replace('/dashboard.html'); }
     });
 
     load(false);

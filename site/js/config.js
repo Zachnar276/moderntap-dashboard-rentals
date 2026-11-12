@@ -11,4 +11,12 @@ window.MODERNTAP = {
   // ModernTap's own website, linked from the guest page.
   SITE_URL: 'https://modern-tap.com/',
   SITE_URL_IS_PLACEHOLDER: false,
+
+  // Shown to guests who answer "I still need help" on a how-to, Wi-Fi or guidebook plaque.
+  // Public Twiddy guest-services numbers (from twiddy.com). Confirm with Twiddy before launch.
+  SUPPORT: {
+    name: 'Twiddy Guest Services',
+    phone: '866-457-1190',
+    text: '252-888-2598',
+  },
 };

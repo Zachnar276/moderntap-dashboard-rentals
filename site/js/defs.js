@@ -10,7 +10,11 @@
     ['“vs previous period”', 'Compared with the same number of days just before the period you picked.'],
     ['Average per house', 'All rebooking taps divided by the number of houses you can see. Bigger houses usually get more taps; per-stay comparisons need occupancy data from Twiddy.'],
     ['Plaque alerts', '“Not being used” means no taps in 14+ days while the house’s other plaques were used (it may be broken, covered or removed). “Low use” means it gets under a quarter of the taps of the house’s typical plaque. Nothing is flagged when a house is empty, or during a plaque’s first 14 days.'],
-    ['Demo data', 'Taps marked as demo were generated to show how the dashboard works. They are removed before plaques go into the houses.'],
+    ['Guest self-help', 'How-to, Wi-Fi and guidebook plaques ask guests “Did this solve it?”. “I figured it out” counts as a call or work order that likely didn’t happen; “I still need help” shows Twiddy’s guest services number and counts as a likely work order. Answering is optional, so these are estimates from the guests who answered. The same phone answering again within a day counts once.'],
+    ['Areas', 'Houses are grouped by town (for example Duck or Corolla). Pick an area to see only those houses; every number on the page updates.'],
+    ['Taps per plaque', 'Taps divided by how many plaques of that kind the house has. It is the fairer way to compare houses with different numbers of plaques.'],
+    ['Timeline notes', 'Short notes from ModernTap, Twiddy or the manager (for example, “plaque moved”) shown as ▼ markers on the daily chart, so changes in the numbers have context.'],
+    ['Demo data', 'Taps and guest answers marked as demo were generated to show how the dashboard works. They are removed before plaques go into the houses.'],
   ];
 
   function render(host) {

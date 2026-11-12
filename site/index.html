@@ -47,7 +47,15 @@
       })
         .then(function (r) { return r.json(); })
         .then(function (data) {
-          if (data.ok) { location.replace('/dashboard.html'); return; }
+          if (data.ok) {
+            // Go back to the last house this person looked at (stored on this device only).
+            var last = null;
+            try { last = JSON.parse(localStorage.getItem('mt_last_house') || 'null'); } catch (e) {}
+            var to = last && last.email === data.user.email && /^[A-Za-z0-9_-]{1,40}$/.test(last.p || '') && last.p !== 'all'
+              ? '/property.html?p=' + encodeURIComponent(last.p) : '/dashboard.html';
+            location.replace(to);
+            return;
+          }
           try { sessionStorage.removeItem('mt_id_token'); } catch (e) {}
           if (data.error === 'not_authorized') {
             show('The account ' + (data.email || '') + ' doesn’t have access yet. Ask ModernTap to add it.', true);

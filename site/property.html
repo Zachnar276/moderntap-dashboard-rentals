@@ -66,6 +66,7 @@
         <div class="legend" id="day-legend">
           <span style="--swatch: var(--series-rebook)">Rebooking</span>
           <span style="--swatch: var(--series-other)">Other taps</span>
+          <span class="note-key hidden" id="note-key">▼ Note</span>
         </div>
         <div class="chart" id="day-chart">
           <div class="tooltip" id="day-tooltip"></div>
@@ -79,6 +80,26 @@
             </table>
           </div>
         </details>
+      </section>
+
+      <section class="card twiddy hidden" id="selfhelp">
+        <h2>Guest self-help</h2>
+        <p class="sub">Answers to “Did this solve it?” on this house’s how-to, Wi-Fi and guidebook plaques. Each “I figured it out” is a call or work order that likely didn’t happen.</p>
+        <div class="big" id="sh-big"></div>
+        <div class="meter" id="sh-meter" aria-hidden="true"></div>
+        <div class="bd-legend" id="sh-legend"></div>
+      </section>
+
+      <section class="card" id="notes">
+        <h2>Timeline notes</h2>
+        <p class="sub">Things that happened at the house, shown as markers on the daily chart (for example, “plaque moved to the fridge”).</p>
+        <form id="note-form" class="pick-row hidden" autocomplete="off">
+          <input type="date" id="note-date" required aria-label="Date">
+          <input type="text" id="note-text" maxlength="140" required placeholder="What happened?" aria-label="Note" style="flex:1;min-width:180px;font:inherit;padding:6px 8px;border-radius:8px;border:1px solid var(--border,#ccc)">
+          <button type="submit" class="btn-small">Add note</button>
+          <span id="note-msg" class="hint"></span>
+        </form>
+        <div id="note-list"></div>
       </section>
 
       <section class="card">
@@ -103,6 +124,7 @@
   <script src="/js/auth.js"></script>
   <script src="/js/switcher.js"></script>
   <script src="/js/defs.js"></script>
+  <script src="/js/types.js"></script>
   <script>
   (function () {
     if (!MTAuth.requireSignIn()) return;
@@ -115,7 +137,8 @@
     var days = [7, 30, 90].indexOf(Number(params.get('days'))) >= 0 ? Number(params.get('days')) : 30;
     var current = null;
 
-    var TYPE_LABELS = { rebook: 'Rebooking', wifi: 'Wi-Fi', guide: 'Guidebook', review: 'Review', local: 'Local tips', other: 'Other' };
+    var TYPE_LABELS = MTTypes.LABELS;
+    var NOTE_ROLES = ['admin', 'twiddy', 'manager'];
     var SVG_NS = 'http://www.w3.org/2000/svg';
 
     function $(id) { return document.getElementById(id); }
@@ -221,6 +244,21 @@
         }
       });
 
+      // Timeline notes: a small marker above the day (details in the tooltip and the list below)
+      var notesByDay = {};
+      (data.notes || []).forEach(function (n) { (notesByDay[n.date] = notesByDay[n.date] || []).push(n); });
+      var anyNote = false;
+      rows.forEach(function (r, idx) {
+        if (!notesByDay[r.date]) return;
+        anyNote = true;
+        var cx = m.left + idx * slot + slot / 2;
+        svg.appendChild(el('line', { x1: cx, x2: cx, y1: m.top + 6, y2: m.top + ih, stroke: 'var(--text-muted)',
+          'stroke-width': 1, 'stroke-dasharray': '2 3', opacity: 0.6 }));
+        svg.appendChild(el('path', { d: 'M' + (cx - 5) + ',' + m.top + 'H' + (cx + 5) + 'L' + cx + ',' + (m.top + 7) + 'Z',
+          fill: 'var(--text-secondary)' }));
+      });
+      $('note-key').classList.toggle('hidden', !anyNote);
+
       // X labels: first, middle, last
       [0, Math.floor((rows.length - 1) / 2), rows.length - 1].forEach(function (idx, k) {
         if (!rows[idx]) return;
@@ -248,6 +286,7 @@
           d.appendChild(el('span', null, name));
           tip.appendChild(d);
         }
+        (notesByDay[r.date] || []).forEach(function (n) { tip.appendChild(el('div', { class: 'row note-row' }, '▼ ' + n.note)); });
         if (hasSplit) {
           row(r.rebook, 'Rebooking', 'var(--series-rebook)');
           row(r.taps - r.rebook, 'Other taps', 'var(--series-other)');
@@ -378,8 +417,92 @@
       }
     }
 
+    function renderSelfHelp(data) {
+      var s = data.survey || {};
+      var box = $('selfhelp');
+      var hasHelpPlaques = (data.byChip || []).some(function (c) { return c.active && MTTypes.SURVEY.indexOf(c.link_type) >= 0; });
+      var n = (s.solved || 0) + (s.needsHelp || 0);
+      box.classList.toggle('hidden', !hasHelpPlaques && !n);
+      var big = $('sh-big');
+      big.textContent = '';
+      function stat(v, l, now, prev) {
+        var d = el('div');
+        d.appendChild(el('div', { class: 'v' }, v));
+        d.appendChild(el('div', { class: 'l' }, l));
+        if (prev != null) { var dl = el('div', { class: 'delta' }); renderDelta(dl, now, prev); d.appendChild(dl); }
+        big.appendChild(d);
+      }
+      stat(fmt(s.solved || 0), 'Figured it out themselves', s.solved || 0, s.prevSolved);
+      stat(fmt(s.needsHelp || 0), 'Still needed help', s.needsHelp || 0, s.prevNeedsHelp);
+      stat(n ? Math.round((s.solved / n) * 100) + '%' : '–', 'Solved on their own');
+      var meter = $('sh-meter');
+      meter.textContent = '';
+      if (n) {
+        if (s.solved) { var a = el('span', { class: 'ok' }); a.style.flex = s.solved + ' 1 0'; meter.appendChild(a); }
+        if (s.needsHelp) { var b = el('span', { class: 'help' }); b.style.flex = s.needsHelp + ' 1 0'; meter.appendChild(b); }
+      }
+      var lg = $('sh-legend');
+      lg.textContent = '';
+      if (n) [['Figured it out', 'var(--type-guide)'], ['Still needed help', 'var(--type-wifi)']].forEach(function (x) {
+        var sp = el('span', null, x[0]); sp.style.setProperty('--swatch', x[1]); lg.appendChild(sp);
+      });
+    }
+
+    function canNote(u) { return u && NOTE_ROLES.indexOf(u.role) >= 0 && !u.viewingAsBy; }
+    function renderNotes(data) {
+      var u = data.user;
+      $('note-form').classList.toggle('hidden', !canNote(u));
+      var list = $('note-list');
+      list.textContent = '';
+      var notes = data.notes || [];
+      if (!notes.length) {
+        list.appendChild(el('p', { class: 'hint' }, canNote(u) ? 'No notes yet. Add one above.' : 'No notes yet.'));
+        return;
+      }
+      notes.forEach(function (n) {
+        var row = el('div', { class: 'note-item' });
+        row.appendChild(el('b', null, longDate(n.date)));
+        row.appendChild(document.createTextNode(' · ' + n.note + (n.author ? ' (' + n.author + ')' : '')));
+        if (u && u.role === 'admin' && !u.viewingAsBy) {
+          var del = el('button', { type: 'button', class: 'linkbtn', style: 'margin-left:8px' }, 'Delete');
+          del.addEventListener('click', function () {
+            del.disabled = true;
+            MTAuth.api('deleteNote', { note_id: n.id }).then(function (r) { if (r.ok) load(); else del.disabled = false; });
+          });
+          row.appendChild(del);
+        }
+        list.appendChild(row);
+      });
+    }
+
+    (function () {
+      var t = new Date();
+      var iso = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+      $('note-date').value = iso;
+      $('note-date').max = iso;
+    })();
+    $('note-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var btn = this.querySelector('button');
+      btn.disabled = true;
+      $('note-msg').textContent = 'Saving…';
+      MTAuth.api('saveNote', { record: { property_id: propertyId, date: $('note-date').value, note: $('note-text').value } })
+        .then(function (r) {
+          if (!r.ok) throw new Error(r.error || 'Could not save');
+          $('note-text').value = '';
+          $('note-msg').textContent = 'Saved.';
+          load();
+        })
+        .catch(function (err) { $('note-msg').textContent = err.message; })
+        .then(function () { btn.disabled = false; });
+    });
+
     function render(data) {
       current = data;
+      MTAuth.showViewAs(data.user);
+      if (data.user) {
+        try { localStorage.setItem('mt_last_house', JSON.stringify({ email: data.user.email, p: propertyId })); } catch (e) {}
+      }
       $('property-name').textContent = data.property.name;
       document.title = data.property.name + ' · ModernTap';
       $('rebook-value').textContent = fmt(data.rebookTaps);
@@ -395,6 +518,8 @@
       renderDayChart(data);
       renderChips(data);
       renderLinks(data);
+      renderSelfHelp(data);
+      renderNotes(data);
       var demo = $('demo');
       if (data.demoTaps > 0) {
         demo.textContent = '';

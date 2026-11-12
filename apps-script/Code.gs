@@ -2,22 +2,27 @@
  * ModernTap Dashboard — Google Apps Script API
  *
  *   - setup()          creates any missing tabs (and test data in an empty Sheet)
- *   - clearTestTaps()  removes the fake test taps (device = "test")
+ *   - clearTestTaps()  removes all demo data (device = "test") from Taps, Clicks and Surveys
  *   - doGet()          public actions used by guests' phones (house page, clicks)
  *   - doPost()         signed-in actions used by the dashboard (Sign in with Google)
  */
 
 const TABS = {
-  Properties: ['property_id', 'name', 'address', 'active', 'tagline'],
+  Properties: ['property_id', 'name', 'address', 'active', 'tagline', 'area'],
   Chips: ['chip_id', 'property_id', 'spot', 'link_type', 'active', 'added'],
   Links: ['property_id', 'link_type', 'label', 'url', 'details', 'placeholder', 'sort'],
   Taps: ['timestamp', 'chip_id', 'property_id', 'link_type', 'device'],
   Clicks: ['timestamp', 'property_id', 'link_type', 'chip_id', 'device'],
   Users: ['user_id', 'name', 'email', 'role', 'property_ids'],
+  Surveys: ['timestamp', 'property_id', 'chip_id', 'link_type', 'answer', 'device'],
+  Notes: ['note_id', 'property_id', 'date', 'note', 'author'],
   Bookings: ['booking_id', 'property_id', 'booked_date', 'stay_start', 'source'],
 };
 
-const LINK_TYPES = ['rebook', 'wifi', 'guide', 'review', 'local', 'other'];
+const LINK_TYPES = ['rebook', 'wifi', 'guide', 'howto', 'review', 'local', 'other'];
+// Plaques that help guests fix things themselves; their guest page asks "Did this solve it?"
+const SURVEY_TYPES = ['howto', 'wifi', 'guide'];
+const SURVEY_ANSWERS = ['solved', 'needs_help'];
 const DEVICES = ['phone', 'tablet', 'desktop', 'unknown'];
 
 /* ───────────────────────── Setup ───────────────────────── */
@@ -83,15 +88,20 @@ function addTestData_(ss) {
   }
 }
 
+/** Removes all demo data (rows marked device = "test") from Taps, Clicks and Surveys. Run before plaques go in. */
 function clearTestTaps() {
-  const sh = getSheet_('Taps');
-  const last = sh.getLastRow();
-  if (last < 2) return;
-  const width = TABS.Taps.length;
-  const keep = sh.getRange(2, 1, last - 1, width).getValues()
-    .filter(function (r) { return r[4] !== 'test'; });
-  sh.getRange(2, 1, last - 1, width).clearContent();
-  if (keep.length) sh.getRange(2, 1, keep.length, width).setValues(keep);
+  ['Taps', 'Clicks', 'Surveys'].forEach(function (tab) {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(tab);
+    if (!sh || sh.getLastRow() < 2) return;
+    const width = sh.getLastColumn();
+    const headers = sh.getRange(1, 1, 1, width).getValues()[0];
+    const dev = headers.indexOf('device');
+    if (dev < 0) return;
+    const rows = sh.getRange(2, 1, sh.getLastRow() - 1, width).getValues();
+    const keep = rows.filter(function (r) { return r[dev] !== 'test'; });
+    sh.getRange(2, 1, rows.length, width).clearContent();
+    if (keep.length) sh.getRange(2, 1, keep.length, width).setValues(keep);
+  });
 }
 
 /* ───────────────────────── Web app ───────────────────────── */
@@ -113,6 +123,8 @@ function doGet(e) {
         return json_(getHouse_(p.chip, p.property, p.d, p.v));
       case 'click':
         return json_(logClick_(p.property, p.type, p.chip, p.d, p.v));
+      case 'survey':
+        return json_(logSurvey_(p.chip, p.answer, p.d, p.v));
       default:
         return json_({ ok: false, error: 'Unknown action' });
     }
@@ -127,6 +139,8 @@ function doGet(e) {
  * not the address, so it never shows up in logs or browser history.
  *   { action: 'me' }
  *   { action: 'overview', days: 30 }
+ *   { action: 'saveNote', record: { property_id, date, note } }   admin / twiddy / manager
+ *   any request can include viewAs: 'email' (admins only; read-only preview)
  *   { action: 'houses' }                       list of houses this user can see (for the house switcher)
  *   { action: 'stats', property: 'ocd-001', days: 30 }
  *   admin only: adminData, saveProperty, saveChip, deleteChip, saveLink, deleteLink, saveUser, deleteUser
@@ -134,8 +148,18 @@ function doGet(e) {
 function doPost(e) {
   try {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    const user = verifyUser_(body.token);
+    let user = verifyUser_(body.token);
     if (!user.ok) return json_(user);
+
+    // Admins can preview the dashboard as someone else. The preview is read-only.
+    if (body.viewAs) {
+      if (user.role !== 'admin') return json_({ ok: false, error: 'admin_only' });
+      const target = lookupUser_(body.viewAs);
+      if (!target.ok) return json_({ ok: false, error: 'view_as_unknown' });
+      target.viewingAsBy = user.email;
+      user = target;
+    }
+    const readOnly = !!user.viewingAsBy;
 
     const days = clampDays_(body.days);
     switch (body.action) {
@@ -152,8 +176,17 @@ function doPost(e) {
         if (user.propertyIds.indexOf(String(body.property)) < 0) {
           return json_({ ok: false, error: 'no_access' });
         }
-        return json_(getStats_(String(body.property), days));
+        const stats = getStats_(String(body.property), days);
+        stats.user = publicUser_(user);
+        return json_(stats);
+      case 'saveNote':
+        if (readOnly) return json_({ ok: false, error: 'read_only' });
+        return json_(saveNote_(user, body.record || {}));
+      case 'deleteNote':
+        if (readOnly || user.role !== 'admin') return json_({ ok: false, error: 'admin_only' });
+        return json_(deleteRows_('Notes', function (n) { return String(n.note_id) === String(body.note_id); }));
       default:
+        if (readOnly) return json_({ ok: false, error: 'read_only' });
         return json_(adminAction_(user, body));
     }
   } catch (err) {
@@ -164,7 +197,9 @@ function doPost(e) {
 /* ───────────────────────── Sign in with Google ───────────────────────── */
 
 const GOOGLE_CLIENT_ID = '738140668443-le3dhuc3ujmg9r51rmd6j2djlsgfei50.apps.googleusercontent.com';
-const ROLES = ['admin', 'manager', 'owner'];
+// admin: everything. twiddy: every house (read-only) + Twiddy panel. manager: assigned houses. owner: their houses.
+const ROLES = ['admin', 'twiddy', 'manager', 'owner'];
+const ALL_HOUSE_ROLES = ['admin', 'twiddy'];
 
 /**
  * Checks a Google ID token with Google, then looks the email up in the Users tab.
@@ -201,29 +236,37 @@ function verifyUser_(token) {
     if (ttl > 30) cache.put(cacheKey, JSON.stringify(identity), ttl);
   }
 
+  return lookupUser_(identity.email, identity.name);
+}
+
+/** Finds a user in the Users tab and works out which houses they can see. */
+function lookupUser_(email, fallbackName) {
+  email = String(email || '').trim().toLowerCase();
   const row = readTable_('Users').filter(function (u) {
-    return String(u.email).trim().toLowerCase() === identity.email;
+    return String(u.email).trim().toLowerCase() === email;
   })[0];
   const role = row ? String(row.role).trim().toLowerCase() : '';
   if (!row || ROLES.indexOf(role) < 0) {
-    return { ok: false, error: 'not_authorized', email: identity.email };
+    return { ok: false, error: 'not_authorized', email: email };
   }
 
   const activeIds = readTable_('Properties')
     .filter(function (p) { return isTrue_(p.active); })
     .map(function (p) { return String(p.property_id); });
 
-  const propertyIds = role === 'admin'
+  const propertyIds = ALL_HOUSE_ROLES.indexOf(role) >= 0
     ? activeIds
     : String(row.property_ids || '').split(/[,\s]+/)
         .map(function (s) { return s.trim(); })
         .filter(function (id) { return id && activeIds.indexOf(id) >= 0; });
 
-  return { ok: true, email: identity.email, name: row.name || identity.name, role: role, propertyIds: propertyIds };
+  return { ok: true, email: email, name: row.name || fallbackName || '', role: role, propertyIds: propertyIds };
 }
 
 function publicUser_(user) {
-  return { email: user.email, name: user.name, role: user.role, propertyCount: user.propertyIds.length };
+  const out = { email: user.email, name: user.name, role: user.role, propertyCount: user.propertyIds.length };
+  if (user.viewingAsBy) out.viewingAsBy = user.viewingAsBy;
+  return out;
 }
 
 /* ───────────────────────── Guest house page ───────────────────────── */
@@ -305,6 +348,20 @@ function logClick_(propertyId, linkType, chipId, device, visitor) {
   return { ok: ok };
 }
 
+/** Guest answered "Did this solve it?" on a help plaque. One answer per phone per plaque per day. */
+function logSurvey_(chipId, answer, device, visitor) {
+  if (SURVEY_ANSWERS.indexOf(answer) < 0) return { ok: false, error: 'Bad answer' };
+  const id = String(chipId || '').trim().toLowerCase();
+  const chip = readTable_('Chips').filter(function (c) {
+    return String(c.chip_id).trim().toLowerCase() === id && isTrue_(c.active);
+  })[0];
+  if (!chip || SURVEY_TYPES.indexOf(chip.link_type) < 0) return { ok: false, error: 'Not a help plaque' };
+  const v = VISITOR_RE.test(visitor || '') ? visitor : '';
+  if (v && !firstInWindow_('survey:' + id + ':' + v, 86400)) return { ok: true, logged: 'repeat' };
+  const ok = appendRow_('Surveys', [new Date(), String(chip.property_id), chip.chip_id, chip.link_type, answer, cleanDevice_(device)]);
+  return { ok: ok };
+}
+
 /** Appends a row under a lock. Returns false instead of throwing, so guests are never blocked. */
 function appendRow_(tab, row) {
   try {
@@ -362,6 +419,7 @@ function summarize_(propertyIds, days) {
       rebookClicks: 0, prevRebookClicks: 0,
       byType: byType, clicksByType: clicksByType, byDay: byDay, byChip: {},
       lastTapByChip: {}, recentTaps: 0, demoTaps: 0,
+      solved: 0, needsHelp: 0, prevSolved: 0, prevNeedsHelp: 0, demoSurveys: 0,
     };
   });
 
@@ -398,6 +456,19 @@ function summarize_(propertyIds, days) {
       if (type === 'rebook') s.rebookClicks++;
     } else if (prev[day] && type === 'rebook') {
       s.prevRebookClicks++;
+    }
+  });
+
+  readTable_('Surveys').forEach(function (r) {
+    const s = byProperty[String(r.property_id)];
+    if (!s || !(r.timestamp instanceof Date)) return;
+    const day = dayKey(r.timestamp);
+    const solved = r.answer === 'solved';
+    if (period[day]) {
+      if (solved) s.solved++; else if (r.answer === 'needs_help') s.needsHelp++;
+      if (r.device === 'test') s.demoSurveys++;
+    } else if (prev[day]) {
+      if (solved) s.prevSolved++; else if (r.answer === 'needs_help') s.prevNeedsHelp++;
     }
   });
 
@@ -471,6 +542,14 @@ function getStats_(pid, days) {
     rebookClicks: s.rebookClicks,
     prevRebookClicks: s.prevRebookClicks,
     demoTaps: s.demoTaps,
+    survey: { solved: s.solved, needsHelp: s.needsHelp, prevSolved: s.prevSolved, prevNeedsHelp: s.prevNeedsHelp, demo: s.demoSurveys },
+    notes: readTable_('Notes')
+      .filter(function (n) { return String(n.property_id) === pid && n.date instanceof Date; })
+      .map(function (n) {
+        return { id: String(n.note_id), date: Utilities.formatDate(n.date, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), 'yyyy-MM-dd'),
+                 note: String(n.note), author: String(n.author || '') };
+      })
+      .sort(function (a, b) { return a.date < b.date ? 1 : -1; }),
     byType: s.byType,
     clicksByType: s.clicksByType,
     byChip: plaqueHealth_(chips, s),
@@ -496,7 +575,8 @@ function getOverview_(user, days) {
   const sum = summarize_(ids, days);
 
   const allChips = readTable_('Chips');
-  const totals = { totalTaps: 0, rebookTaps: 0, prevTotalTaps: 0, prevRebookTaps: 0, rebookClicks: 0, prevRebookClicks: 0, demoTaps: 0 };
+  const totals = { totalTaps: 0, rebookTaps: 0, prevTotalTaps: 0, prevRebookTaps: 0, rebookClicks: 0, prevRebookClicks: 0, demoTaps: 0,
+                   solved: 0, needsHelp: 0, prevSolved: 0, prevNeedsHelp: 0, demoSurveys: 0 };
   const houses = props.map(function (p) {
     const id = String(p.property_id);
     const s = sum.byProperty[id];
@@ -506,7 +586,11 @@ function getOverview_(user, days) {
       id: id,
       name: p.name,
       tagline: p.tagline || '',
+      area: String(p.area || '').trim() || 'Other',
       totalTaps: s.totalTaps,
+      prevTotalTaps: s.prevTotalTaps,
+      demoTaps: s.demoTaps,
+      solved: s.solved, needsHelp: s.needsHelp, prevSolved: s.prevSolved, prevNeedsHelp: s.prevNeedsHelp,
       rebookTaps: s.rebookTaps,
       prevRebookTaps: s.prevRebookTaps,
       rebookClicks: s.rebookClicks,
@@ -515,12 +599,33 @@ function getOverview_(user, days) {
       byType: s.byType,
       clicksByType: s.clicksByType,
       plaques: health.filter(function (h) { return h.active; }).length,
+      plaquesByType: health.filter(function (h) { return h.active; }).reduce(function (m, h) {
+        m[h.link_type] = (m[h.link_type] || 0) + 1; return m;
+      }, {}),
       alerts: health.filter(function (h) { return h.status === 'silent' || h.status === 'low'; })
         .map(function (h) { return { spot: h.spot || h.chip_id, status: h.status }; }),
     };
   });
 
   return { ok: true, user: publicUser_(user), days: days, totals: totals, houses: houses };
+}
+
+/* ───────────────────────── Timeline notes ───────────────────────── */
+
+const NOTE_ROLES = ['admin', 'twiddy', 'manager'];
+
+function saveNote_(user, r) {
+  if (NOTE_ROLES.indexOf(user.role) < 0) return fail_('Only ModernTap, Twiddy and managers can add notes.');
+  const pid = String(r.property_id || '').trim();
+  if (user.propertyIds.indexOf(pid) < 0) return fail_('No access to that house.');
+  const note = cleanText_(r.note, 140);
+  if (!note) return fail_('Write a short note.');
+  const m = String(r.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return fail_('Pick a date.');
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12);
+  if (isNaN(date.getTime()) || date.getTime() > Date.now() + 86400000) return fail_('Pick a date that isn’t in the future.');
+  getSheet_('Notes').appendRow(['n-' + Utilities.getUuid().slice(0, 8), pid, date, note, cleanText_(user.name || user.email, 80)]);
+  return { ok: true };
 }
 
 /* ───────────────────────── Admin (signed-in admins only) ───────────────────────── */
@@ -561,7 +666,8 @@ function adminData_() {
   return {
     ok: true,
     properties: readTable_('Properties').map(function (p) {
-      return { property_id: String(p.property_id), name: p.name, address: p.address, tagline: p.tagline, active: isTrue_(p.active) };
+      return { property_id: String(p.property_id), name: p.name, address: p.address, tagline: p.tagline,
+               area: p.area || '', active: isTrue_(p.active) };
     }),
     chips: readTable_('Chips').map(function (c) {
       return { chip_id: String(c.chip_id), property_id: String(c.property_id), spot: c.spot, link_type: c.link_type,
@@ -640,7 +746,7 @@ function saveProperty_(r) {
   if (!name) return fail_('House name is required.');
   return upsertRow_('Properties', function (p) { return String(p.property_id) === id; }, {
     property_id: id, name: name, address: cleanText_(r.address, 200), active: r.active !== false,
-    tagline: cleanText_(r.tagline, 160),
+    tagline: cleanText_(r.tagline, 160), area: cleanText_(r.area, 40),
   });
 }
 
@@ -695,7 +801,8 @@ function saveUser_(me, r) {
   const existing = readTable_('Users').filter(function (u) { return String(u.email).toLowerCase() === email; })[0];
   return upsertRow_('Users', function (u) { return String(u.email).toLowerCase() === email; }, {
     user_id: existing ? existing.user_id : 'u-' + Utilities.getUuid().slice(0, 8),
-    name: cleanText_(r.name, 80), email: email, role: role, property_ids: role === 'admin' ? '' : ids.join(', '),
+    name: cleanText_(r.name, 80), email: email, role: role,
+    property_ids: ALL_HOUSE_ROLES.indexOf(role) >= 0 ? '' : ids.join(', '),
   });
 }
 

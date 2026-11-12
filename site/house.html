@@ -108,6 +108,21 @@
     .about a.more { font-weight: 600; color: var(--ocean-2); text-decoration: none; }
     .about a.more:hover { text-decoration: underline; }
 
+    /* "Did this solve it?" survey on help plaques */
+    .survey h3 { font-size: 16px; margin: 0 0 4px; }
+    .survey p { margin: 0 0 12px; color: var(--ink-2); font-size: 14px; }
+    .survey .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .survey button {
+      font: inherit; font-weight: 600; font-size: 15px; padding: 12px 10px; border-radius: 12px; cursor: pointer;
+      border: 1.5px solid var(--line); background: var(--sand); color: var(--ink);
+    }
+    .survey button:hover { border-color: var(--sea); }
+    .survey button:disabled { opacity: 0.6; cursor: default; }
+    .survey .thanks { font-weight: 600; color: var(--ocean-2); margin: 0; }
+    .help-box { margin-top: 12px; background: #eef6fa; border-radius: 12px; padding: 12px 14px; font-size: 15px; }
+    .help-box b { display: block; margin-bottom: 6px; }
+    .help-box a { display: inline-block; margin: 2px 12px 2px 0; font-weight: 600; color: var(--ocean-2); }
+
     footer { text-align: center; color: var(--ink-3); font-size: 12px; padding: 8px 16px 28px; }
 
     .state { text-align: center; padding: 40px 12px; color: var(--ink-2); }
@@ -144,6 +159,7 @@
 
     <div id="content" class="hidden">
       <section id="primary" class="card primary hidden"></section>
+      <section id="survey" class="card survey hidden" aria-live="polite"></section>
       <h2 class="section-title" id="more-title">For your stay</h2>
       <section class="card list" id="list"></section>
     </div>
@@ -174,6 +190,7 @@
       rebook: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M9 15l2 2 4-4"/>',
       wifi: '<path d="M2 9a15 15 0 0 1 20 0"/><path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1" fill="currentColor"/>',
       guide: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M8 7h7M8 11h7"/>',
+      howto: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>',
       review: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
       local: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
       other: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>',
@@ -263,6 +280,56 @@
       box.classList.remove('hidden');
     }
 
+    // Help plaques (how-to, Wi-Fi, guidebook) ask one question so Twiddy can see how many
+    // guests solved it themselves instead of calling. Only real plaque taps are recorded.
+    var SURVEY_TYPES = ['howto', 'wifi', 'guide'];
+    function telHref(n) { return 'tel:+1' + String(n).replace(/\D/g, ''); }
+    function smsHref(n) { return 'sms:+1' + String(n).replace(/\D/g, ''); }
+    function showHelp(box) {
+      var s = cfg.SUPPORT || {};
+      var help = el('div', 'help-box');
+      help.appendChild(el('b', null, 'Contact ' + (s.name || 'guest services')));
+      if (s.phone) { var a = el('a', null, 'Call ' + s.phone); a.href = telHref(s.phone); help.appendChild(a); }
+      if (s.text) { var t = el('a', null, 'Text ' + s.text); t.href = smsHref(s.text); help.appendChild(t); }
+      box.appendChild(help);
+    }
+    function renderSurvey(link) {
+      var box = $('survey');
+      if (SURVEY_TYPES.indexOf(link.type) < 0) return;
+      var doneKey = 'mt_s_' + (house.chip || house.property.id);
+      var answered = null;
+      try { answered = sessionStorage.getItem(doneKey); } catch (e) {}
+      box.textContent = '';
+      if (answered) {
+        box.appendChild(el('p', 'thanks', 'Thanks for letting us know.'));
+        if (answered === 'needs_help') showHelp(box);
+        box.classList.remove('hidden');
+        return;
+      }
+      box.appendChild(el('h3', null, 'Did this solve it?'));
+      box.appendChild(el('p', null, 'One tap helps the homeowner keep this guide useful.'));
+      var row = el('div', 'choices');
+      [['solved', 'I figured it out'], ['needs_help', 'I still need help']].forEach(function (c) {
+        var b = el('button', null, c[1]);
+        b.type = 'button';
+        b.addEventListener('click', function () {
+          if (house.chip && !isPreview) {
+            var url = cfg.API_URL + '?action=survey&chip=' + encodeURIComponent(house.chip) +
+              '&answer=' + c[0] + '&d=' + device + '&v=' + visitor;
+            try { fetch(url, { keepalive: true, mode: 'no-cors' }); } catch (e) { /* never block the guest */ }
+          }
+          try { sessionStorage.setItem(doneKey, c[0]); } catch (e) {}
+          box.textContent = '';
+          box.appendChild(el('p', 'thanks', c[0] === 'solved' ? 'Great, enjoy your stay!' : 'Sorry about that. Here’s who can help:'));
+          if (c[0] === 'needs_help') showHelp(box);
+          if (isPreview) box.appendChild(note('Preview: answers here are not recorded.'));
+        });
+        row.appendChild(b);
+      });
+      box.appendChild(row);
+      box.classList.remove('hidden');
+    }
+
     function renderList(links) {
       var list = $('list');
       list.textContent = '';
@@ -299,6 +366,7 @@
       var focus = focusType ? data.links.filter(function (l) { return l.type === focusType; })[0] : null;
       if (focus) {
         renderPrimary(focus);
+        renderSurvey(focus);
         $('more-title').textContent = 'More for your stay';
       }
       renderList(data.links.filter(function (l) { return l !== focus; }));

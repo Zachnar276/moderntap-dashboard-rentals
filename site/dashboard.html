@@ -36,25 +36,26 @@
 
     <div id="content" class="content hidden">
       <div id="demo" class="demo-banner hidden" role="note"></div>
-      <section class="card hero">
-        <div class="label">Rebooking taps, all houses</div>
+      <div class="area-tabs hidden" id="area-tabs" role="group" aria-label="Area"></div>
+      <section class="card hero jump" data-jump="rebookTaps" tabindex="0" role="button" aria-label="Rebooking taps: see which houses they come from">
+        <div class="label" id="hero-label">Rebooking taps, all houses</div>
         <div class="value" id="rebook-value">–</div>
         <div class="delta" id="rebook-delta"></div>
       </section>
 
       <div class="tiles three">
-        <section class="card tile">
+        <section class="card tile jump" data-jump="rebookClicks" tabindex="0" role="button">
           <div class="label">Potential rebooks (clicks)</div>
           <div class="value" id="clicks-value">–</div>
           <div class="delta" id="clicks-delta"></div>
           <div class="hint">Guests who pressed “Choose your dates”</div>
         </section>
-        <section class="card tile">
+        <section class="card tile jump" data-jump="types" tabindex="0" role="button">
           <div class="label">Total taps</div>
           <div class="value" id="total-value">–</div>
           <div class="delta" id="total-delta"></div>
         </section>
-        <section class="card tile">
+        <section class="card tile jump" data-jump="rebookTaps" tabindex="0" role="button">
           <div class="label">Average per house</div>
           <div class="value" id="avg-value">–</div>
           <div class="hint" id="avg-sub"></div>
@@ -81,6 +82,44 @@
         </details>
       </section>
 
+      <section class="card twiddy hidden" id="twiddy">
+        <div class="section-head">
+          <div>
+            <h2>Guest self-help · possible work orders avoided</h2>
+            <p class="sub" style="margin:0">Answers to “Did this solve it?” on how-to, Wi-Fi and guidebook plaques. Twiddy view.</p>
+          </div>
+        </div>
+        <div class="big" id="tw-big"></div>
+        <div id="tw-rows"></div>
+        <details>
+          <summary>Show as table</summary>
+          <div class="table-wrap"><table id="tw-table"></table></div>
+        </details>
+      </section>
+
+      <section class="card hidden" id="compare">
+        <h2>Compare two houses</h2>
+        <div class="pick-row">
+          <select id="cmp-a" aria-label="First house"></select>
+          <span>vs</span>
+          <select id="cmp-b" aria-label="Second house"></select>
+        </div>
+        <table class="cmp" id="cmp-table"></table>
+        <p class="hint">Bold marks the higher number. Bigger houses usually get more taps, so “taps per plaque” is the fairer comparison.</p>
+      </section>
+
+      <section class="card hidden" id="same">
+        <h2>Same plaque, every house</h2>
+        <div class="pick-row">
+          <label>Plaque type <select id="same-type"></select></label>
+        </div>
+        <div id="same-rows"></div>
+        <details>
+          <summary>Show as table</summary>
+          <div class="table-wrap"><table id="same-table"></table></div>
+        </details>
+      </section>
+
       <div class="sort-row">
         <h2>Houses</h2>
         <label>Sort by
@@ -103,13 +142,17 @@
   <script src="/js/auth.js"></script>
   <script src="/js/switcher.js"></script>
   <script src="/js/defs.js"></script>
+  <script src="/js/types.js"></script>
   <script>
   (function () {
     if (!MTAuth.requireSignIn()) return;
 
     var params = new URLSearchParams(location.search);
     var days = [7, 30, 90].indexOf(Number(params.get('days'))) >= 0 ? Number(params.get('days')) : 30;
-    var current = null;
+    var current = null;   // what's on screen (filtered by area)
+    var full = null;      // everything the server returned
+    var area = 'all';
+    try { area = sessionStorage.getItem('mt_area') || 'all'; } catch (e) {}
     var SVG_NS = 'http://www.w3.org/2000/svg';
 
     function $(id) { return document.getElementById(id); }
@@ -187,7 +230,7 @@
           top.appendChild(el('span', 'rank', '#' + rank + ' of ' + current.houses.length));
         }
         a.appendChild(top);
-        a.appendChild(el('div', 'tag', h.tagline || ' '));
+        a.appendChild(el('div', 'tag', [full.houses.some(function (x) { return x.area !== h.area; }) ? h.area : '', h.tagline].filter(Boolean).join(' · ') || ' '));
         var nums = el('div', 'nums');
         function num(value, label, lead, now, prev) {
           var n = el('div', 'num' + (lead ? ' lead' : ''));
@@ -226,8 +269,8 @@
     }
 
     /* ── Where the numbers come from: each house's share, or its taps split by plaque type ── */
-    var TYPES = ['rebook', 'wifi', 'guide', 'review', 'local', 'other'];
-    var TYPE_LABELS = { rebook: 'Rebooking', wifi: 'Wi-Fi', guide: 'Guidebook', review: 'Review', local: 'Local tips', other: 'Other' };
+    var TYPES = MTTypes.ORDER;
+    var TYPE_LABELS = MTTypes.LABELS;
     var bdMode = 'rebookTaps';
 
     function renderBreakdown() {
@@ -303,13 +346,217 @@
       });
     });
 
+    var SUM_KEYS = ['totalTaps', 'rebookTaps', 'prevTotalTaps', 'prevRebookTaps', 'rebookClicks', 'prevRebookClicks', 'demoTaps',
+                    'solved', 'needsHelp', 'prevSolved', 'prevNeedsHelp'];
+    function view() {
+      var houses = area === 'all' ? full.houses : full.houses.filter(function (h) { return h.area === area; });
+      var totals = {};
+      SUM_KEYS.forEach(function (k) { totals[k] = houses.reduce(function (n, h) { return n + (h[k] || 0); }, 0); });
+      return { user: full.user, houses: houses, totals: totals };
+    }
+    function pct(a, b) { return b ? Math.round((a / b) * 100) : 0; }
+    function td(text, cls) { var c = el('td', cls, text); return c; }
+
+    function renderAreas() {
+      var wrap = $('area-tabs');
+      var areas = [];
+      full.houses.forEach(function (h) { if (areas.indexOf(h.area) < 0) areas.push(h.area); });
+      areas.sort();
+      if (area !== 'all' && areas.indexOf(area) < 0) area = 'all';
+      wrap.textContent = '';
+      wrap.classList.toggle('hidden', areas.length < 2);
+      if (areas.length < 2) return;
+      ['all'].concat(areas).forEach(function (a) {
+        var n = a === 'all' ? full.houses.length : full.houses.filter(function (h) { return h.area === a; }).length;
+        var b = el('button', null, (a === 'all' ? 'All areas' : a) + ' (' + n + ')');
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(a === area));
+        b.addEventListener('click', function () {
+          area = a;
+          try { sessionStorage.setItem('mt_area', a); } catch (e) {}
+          renderAll();
+        });
+        wrap.appendChild(b);
+      });
+    }
+
+    /* ── Twiddy panel: guests who solved it themselves vs needed help ── */
+    function renderTwiddy() {
+      var box = $('twiddy');
+      var role = current.user.role;
+      var show = role === 'twiddy' || role === 'admin';
+      box.classList.toggle('hidden', !show);
+      if (!show) return;
+      var t = current.totals;
+      var answered = t.solved + t.needsHelp;
+      var big = $('tw-big');
+      big.textContent = '';
+      function stat(v, l, now, prev) {
+        var d = el('div');
+        d.appendChild(el('div', 'v', v));
+        d.appendChild(el('div', 'l', l));
+        if (prev != null) { var dl = el('div', 'delta'); renderDelta(dl, now, prev, true); d.appendChild(dl); }
+        big.appendChild(d);
+      }
+      stat(fmt(t.solved), 'Possible work orders avoided (“I figured it out”)', t.solved, t.prevSolved);
+      stat(fmt(t.needsHelp), 'Still needed help (likely work orders)', t.needsHelp, t.prevNeedsHelp);
+      stat(answered ? pct(t.solved, answered) + '%' : '–', 'Solved on their own, of ' + fmt(answered) + ' answers');
+
+      var rows = $('tw-rows'), table = $('tw-table');
+      rows.textContent = ''; table.textContent = '';
+      var list = current.houses.slice().sort(function (a, b) { return b.solved - a.solved || String(a.name).localeCompare(String(b.name)); });
+      var max = Math.max.apply(null, list.map(function (h) { return h.solved + h.needsHelp; }).concat([1]));
+      list.forEach(function (h) {
+        var n = h.solved + h.needsHelp;
+        var row = el('div', 'bd-row');
+        var name = el('a', 'bd-name', h.name);
+        name.href = '/property.html?p=' + encodeURIComponent(h.id) + '&days=' + days;
+        row.appendChild(name);
+        var track = el('div', 'bd-track');
+        track.style.width = 'calc(100% * ' + (n / max) + ')';
+        if (h.solved) { var a = el('div', 'bd-seg'); a.style.background = 'var(--type-guide)'; a.style.flex = h.solved + ' 1 0'; a.title = 'Figured it out: ' + h.solved; track.appendChild(a); }
+        if (h.needsHelp) { var b = el('div', 'bd-seg'); b.style.background = 'var(--type-wifi)'; b.style.flex = h.needsHelp + ' 1 0'; b.title = 'Needed help: ' + h.needsHelp; track.appendChild(b); }
+        row.appendChild(track);
+        var v = el('div', 'bd-val', n ? pct(h.solved, n) + '%' : '–');
+        v.appendChild(el('small', null, fmt(h.solved) + ' / ' + fmt(n)));
+        row.appendChild(v);
+        row.setAttribute('aria-label', h.name + ': ' + h.solved + ' figured it out, ' + h.needsHelp + ' needed help');
+        rows.appendChild(row);
+      });
+      var legend = el('div', 'bd-legend');
+      [['Figured it out', 'var(--type-guide)'], ['Still needed help', 'var(--type-wifi)']].forEach(function (x) {
+        var sp = el('span', null, x[0]); sp.style.setProperty('--swatch', x[1]); legend.appendChild(sp);
+      });
+      rows.insertBefore(legend, rows.firstChild);
+      var head = el('tr');
+      ['House', 'Figured it out', 'Needed help', 'Solved on own'].forEach(function (c, i) { var th = el('th', i ? 'n' : null, c); head.appendChild(th); });
+      table.appendChild(head);
+      list.forEach(function (h) {
+        var tr = el('tr'); var n = h.solved + h.needsHelp;
+        tr.appendChild(td(h.name));
+        tr.appendChild(td(fmt(h.solved), 'n')); tr.appendChild(td(fmt(h.needsHelp), 'n'));
+        tr.appendChild(td(n ? pct(h.solved, n) + '%' : '–', 'n'));
+        table.appendChild(tr);
+      });
+    }
+
+    /* ── Compare two houses side by side ── */
+    function perPlaque(h) { return h.plaques ? Math.round((h.totalTaps / h.plaques) * 10) / 10 : 0; }
+    var CMP_ROWS = [
+      ['Rebooking taps', function (h) { return h.rebookTaps; }],
+      ['Potential rebooks (clicks)', function (h) { return h.rebookClicks; }],
+      ['Total taps', function (h) { return h.totalTaps; }],
+      ['Plaques', function (h) { return h.plaques; }, true],
+      ['Taps per plaque', perPlaque],
+      ['Guests who figured it out', function (h) { return h.solved; }],
+      ['Guests who needed help', function (h) { return h.needsHelp; }, true],
+      ['Plaque alerts', function (h) { return (h.alerts || []).length; }, true],
+    ];
+    function renderCompare() {
+      var box = $('compare');
+      box.classList.toggle('hidden', current.houses.length < 2);
+      if (current.houses.length < 2) return;
+      var A = $('cmp-a'), B = $('cmp-b');
+      var ids = current.houses.map(function (h) { return h.id; });
+      var aVal = ids.indexOf(A.value) >= 0 ? A.value : ids[0];
+      var bVal = ids.indexOf(B.value) >= 0 && B.value !== aVal ? B.value : ids.filter(function (i) { return i !== aVal; })[0];
+      [A, B].forEach(function (sel) {
+        sel.textContent = '';
+        current.houses.forEach(function (h) { var o = el('option', null, h.name); o.value = h.id; sel.appendChild(o); });
+      });
+      A.value = aVal; B.value = bVal;
+      var ha = current.houses.filter(function (h) { return h.id === aVal; })[0];
+      var hb = current.houses.filter(function (h) { return h.id === bVal; })[0];
+      var table = $('cmp-table');
+      table.textContent = '';
+      var head = el('tr');
+      head.appendChild(el('th', null, ''));
+      head.appendChild(el('th', 'n', ha.name));
+      head.appendChild(el('th', 'n', hb.name));
+      table.appendChild(head);
+      CMP_ROWS.forEach(function (r) {
+        var va = r[1](ha), vb = r[1](hb);
+        var tr = el('tr');
+        tr.appendChild(el('th', null, r[0]));
+        // Bold the higher number (for "needed help" / "alerts" / "plaques" nothing is bolded: higher isn't better).
+        var ca = td(fmt(va), 'n'), cb = td(fmt(vb), 'n');
+        if (!r[2] && va !== vb) (va > vb ? ca : cb).classList.add('win');
+        tr.appendChild(ca); tr.appendChild(cb);
+        table.appendChild(tr);
+      });
+    }
+    $('cmp-a').addEventListener('change', function () { if ($('cmp-b').value === $('cmp-a').value) $('cmp-b').value = ''; renderCompare(); });
+    $('cmp-b').addEventListener('change', function () { if ($('cmp-b').value === $('cmp-a').value) $('cmp-a').value = ''; renderCompare(); });
+
+    /* ── Same plaque type across houses ── */
+    function renderSame() {
+      var box = $('same');
+      var types = TYPES.filter(function (t) {
+        return current.houses.filter(function (h) { return (h.plaquesByType || {})[t]; }).length >= 2;
+      });
+      box.classList.toggle('hidden', current.houses.length < 2 || !types.length);
+      if (current.houses.length < 2 || !types.length) return;
+      var sel = $('same-type');
+      var keep = types.indexOf(sel.value) >= 0 ? sel.value : types[0];
+      sel.textContent = '';
+      types.forEach(function (t) { var o = el('option', null, TYPE_LABELS[t]); o.value = t; sel.appendChild(o); });
+      sel.value = keep;
+      var t = keep;
+      var list = current.houses.filter(function (h) { return (h.plaquesByType || {})[t]; }).map(function (h) {
+        var n = h.plaquesByType[t], taps = (h.byType || {})[t] || 0;
+        return { h: h, plaques: n, taps: taps, per: Math.round((taps / n) * 10) / 10 };
+      }).sort(function (a, b) { return b.per - a.per; });
+      var max = Math.max.apply(null, list.map(function (x) { return x.per; }).concat([1]));
+      var rows = $('same-rows'), table = $('same-table');
+      rows.textContent = ''; table.textContent = '';
+      list.forEach(function (x) {
+        var row = el('div', 'bd-row');
+        var name = el('a', 'bd-name', x.h.name);
+        name.href = '/property.html?p=' + encodeURIComponent(x.h.id) + '&days=' + days;
+        row.appendChild(name);
+        var track = el('div', 'bd-track');
+        track.style.width = 'calc(100% * ' + (x.per / max) + ')';
+        if (x.per > 0) { var seg = el('div', 'bd-seg'); seg.style.background = 'var(--type-' + t + ')'; seg.style.flex = '1 1 0'; track.appendChild(seg); }
+        row.appendChild(track);
+        var v = el('div', 'bd-val', String(x.per));
+        v.appendChild(el('small', null, 'per plaque'));
+        row.appendChild(v);
+        row.setAttribute('aria-label', x.h.name + ': ' + x.per + ' taps per ' + TYPE_LABELS[t] + ' plaque (' + x.taps + ' taps, ' + x.plaques + ' plaques)');
+        rows.appendChild(row);
+      });
+      var head = el('tr');
+      ['House', 'Plaques', 'Taps', 'Taps per plaque'].forEach(function (c, i) { head.appendChild(el('th', i ? 'n' : null, c)); });
+      table.appendChild(head);
+      list.forEach(function (x) {
+        var tr = el('tr');
+        tr.appendChild(td(x.h.name)); tr.appendChild(td(fmt(x.plaques), 'n'));
+        tr.appendChild(td(fmt(x.taps), 'n')); tr.appendChild(td(String(x.per), 'n'));
+        table.appendChild(tr);
+      });
+    }
+    $('same-type').addEventListener('change', renderSame);
+
+    /* ── Click a number to see which houses it comes from ── */
+    function jumpTo(mode) {
+      if ($('breakdown').classList.contains('hidden')) return;
+      bdMode = mode;
+      document.querySelectorAll('[data-bd]').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.bd === mode)); });
+      renderBreakdown();
+      $('breakdown').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    document.querySelectorAll('[data-jump]').forEach(function (n) {
+      n.addEventListener('click', function () { jumpTo(n.dataset.jump); });
+      n.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jumpTo(n.dataset.jump); } });
+    });
+
     function render(data) {
-      current = data;
+      full = data;
       var u = data.user;
+      MTAuth.showViewAs(u);
       $('who').textContent = '';
       $('who').appendChild(el('b', null, u.name || u.email));
       $('who').appendChild(el('span', 'role-pill', u.role));
-      if (u.role === 'admin' && !$('admin-link')) {
+      if (u.role === 'admin' && !u.viewingAsBy && !$('admin-link')) {
         var a = el('a', 'linkbtn', 'Admin');
         a.id = 'admin-link';
         a.href = '/admin.html';
@@ -317,7 +564,19 @@
         $('who').parentNode.insertBefore(document.createTextNode(' · '), $('who'));
       }
       $('title').textContent = u.role === 'owner' ? 'Your houses' : 'All houses';
+      try { localStorage.setItem('mt_last_house', JSON.stringify({ email: u.email, p: 'all' })); } catch (e) {}
+      renderAll();
+      MTSwitcher.populate(data.houses.map(function (h) { return { id: h.id, name: h.name }; }));
+      $('status').classList.add('hidden');
+      $('content').classList.remove('hidden');
+    }
+
+    function renderAll() {
+      renderAreas();
+      current = view();
+      var data = current;
       var t = data.totals;
+      $('hero-label').textContent = 'Rebooking taps, ' + (area === 'all' ? 'all houses' : area + ' houses');
       $('rebook-value').textContent = fmt(t.rebookTaps);
       renderDelta($('rebook-delta'), t.rebookTaps, t.prevRebookTaps);
       $('clicks-value').textContent = fmt(t.rebookClicks);
@@ -328,18 +587,20 @@
       $('avg-value').textContent = avg >= 10 ? fmt(Math.round(avg)) : (Math.round(avg * 10) / 10).toString();
       $('avg-sub').textContent = 'Rebooking taps per house, across ' + data.houses.length + ' house' + (data.houses.length === 1 ? '' : 's');
       var demo = $('demo');
-      if (t.demoTaps > 0) {
+      if (t.demoTaps > 0 || (full.totals.demoSurveys > 0 && (data.user.role === 'twiddy' || data.user.role === 'admin'))) {
         demo.textContent = '';
         demo.appendChild(el('b', null, 'Includes demo data.'));
         demo.appendChild(document.createTextNode(' ' + fmt(t.demoTaps) + ' of the ' + fmt(t.totalTaps) +
-          ' taps in this period are demo taps that show how the dashboard works. Real numbers start when plaques are installed.'));
+          ' taps in this period are demo taps' + (full.totals.demoSurveys ? ', and the guest answers are demo answers,' : '') +
+          ' to show how the dashboard works. Real numbers start when plaques are installed.'));
         demo.classList.remove('hidden');
       } else { demo.classList.add('hidden'); }
-      $('status').classList.add('hidden');
-      $('content').classList.remove('hidden');
+      document.querySelectorAll('[data-jump]').forEach(function (n) { n.classList.toggle('jump', data.houses.length >= 2); });
       renderHouses();
       renderBreakdown();
-      MTSwitcher.populate(data.houses.map(function (h) { return { id: h.id, name: h.name }; }));
+      renderTwiddy();
+      renderCompare();
+      renderSame();
       $('breakdown').classList.toggle('hidden', data.houses.length < 2);
     }
 
@@ -354,7 +615,7 @@
           render(data);
         })
         .catch(function (err) {
-          if (!current) { $('status').textContent = 'Couldn’t load your houses: ' + err.message; $('status').classList.add('error'); }
+          if (!full) { $('status').textContent = 'Couldn’t load your houses: ' + err.message; $('status').classList.add('error'); }
         })
         .then(function () { document.body.classList.remove('loading'); });
     }

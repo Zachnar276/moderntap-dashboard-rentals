@@ -38,14 +38,16 @@ Plain HTML/CSS/JavaScript. No paid services.
 ## Google Sheet tabs
 
 **Properties**
-| property_id | name | address | active | tagline |
-|---|---|---|---|---|
-| ocd-001 | The Ocean Club of Duck | … | TRUE | Oceanfront in Tuckahoe… |
+| property_id | name | address | active | tagline | area |
+|---|---|---|---|---|---|
+| ocd-001 | The Ocean Club of Duck | … | TRUE | Oceanfront in Tuckahoe… | Duck |
+
+`area` (town) groups houses on the dashboard (Duck, Corolla…).
 
 **Chips**
-| chip_id | property_id | spot | link_type | active |
-|---|---|---|---|---|
-| ocd-kitchen | ocd-001 | Kitchen | rebook | TRUE |
+| chip_id | property_id | spot | link_type | active | added |
+|---|---|---|---|---|---|
+| ocd-kitchen | ocd-001 | Kitchen | rebook | TRUE | |
 
 **Links** (what the guest page shows; one row per link per house)
 | property_id | link_type | label | url | details | placeholder | sort |
@@ -56,7 +58,8 @@ Plain HTML/CSS/JavaScript. No paid services.
 | timestamp | property_id | link_type | chip_id | device |
 |---|---|---|---|---|
 
-`link_type` options: `rebook`, `wifi`, `guide`, `review`, `local`, `other`.
+`link_type` options: `rebook`, `wifi`, `guide`, `howto`, `review`, `local`, `other`.
+`howto`, `wifi` and `guide` are help plaques: the guest page asks “Did this solve it?”.
 
 **Taps** (written automatically — never edited by hand)
 | timestamp | chip_id | property_id | link_type | device |
@@ -68,7 +71,17 @@ Plain HTML/CSS/JavaScript. No paid services.
 | user_id | name | email | role | property_ids |
 |---|---|---|---|---|
 
-`role` is `admin`, `manager`, or `owner`. `property_ids` is a comma list; admins see everything.
+`role` is `admin`, `twiddy`, `manager`, or `owner`. `property_ids` is a comma list; admins and Twiddy see everything.
+
+**Surveys** (written automatically when a guest answers “Did this solve it?”)
+| timestamp | property_id | chip_id | link_type | answer | device |
+|---|---|---|---|---|---|
+
+`answer` is `solved` (“I figured it out”: possible work order avoided) or `needs_help` (shown Twiddy guest services; likely work order).
+
+**Notes** (timeline notes shown as markers on a house's daily chart)
+| note_id | property_id | date | note | author |
+|---|---|---|---|---|
 
 **Bookings** (added later, imported by hand)
 | booking_id | property_id | booked_date | stay_start | source |
@@ -110,6 +123,14 @@ Plain HTML/CSS/JavaScript. No paid services.
 - "Where the numbers come from" on the overview: each house's share of rebooking taps / potential rebooks,
   or all taps split by plaque type (validated 6-color order, legend + table view).
 - Demo-data banner whenever demo taps are in the period.
+- Area tabs (Duck / Corolla…) filter every number on the overview.
+- Click the big number or a tile to jump to the houses behind it.
+- Compare two houses side by side; "Same plaque, every house" (taps per plaque of one type).
+- Remember the last house: signing in reopens the house page you last looked at (stored on that device).
+- Timeline notes on each house (admin, Twiddy, managers add; admins delete).
+- Guest self-help: "Did this solve it?" on help plaques; per-house summary for everyone, and a
+  Twiddy panel ("possible work orders avoided") on the overview for Twiddy and admins.
+- Admin "View as": read-only preview of any person's dashboard, with a banner.
 - Guest privacy page (`privacy.html`), linked from guest pages and sign-in. Not legal advice; have it reviewed.
 
 ## Rebooking metric
@@ -120,9 +141,12 @@ Plain HTML/CSS/JavaScript. No paid services.
   rebookings and the rate of rebooking taps to confirmed bookings.
 
 ## Roles
-- **Admin:** all properties; can add properties, chips and users.
+- **Admin:** all properties; can add properties, chips and users; can “View as” anyone (read-only).
+- **Twiddy:** every house, view only, plus the self-help / work-orders panel; can add timeline notes.
 - **Manager:** the properties assigned to them; can edit chip destinations.
 - **Owner:** their own properties; view only.
+- Demo people: Teddy Bear (owner of all three demo houses) and Twiddy Guest Services (demo), both on example.com
+  emails that can't sign in; use View as.
 
 
 ## Guest house page (decided)
