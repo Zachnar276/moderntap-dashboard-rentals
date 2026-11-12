@@ -30,6 +30,7 @@
     <p id="status" class="status">Loading stats…</p>
 
     <div id="content" class="content hidden">
+      <div id="demo" class="demo-banner hidden" role="note"></div>
       <section class="card hero">
         <div class="label">Rebooking taps</div>
         <div class="value" id="rebook-value">–</div>
@@ -76,16 +77,26 @@
       </section>
 
       <section class="card">
-        <h2>Taps by chip</h2>
-        <p class="sub">Where guests are tapping in the home</p>
+        <h2>Plaques</h2>
+        <p class="sub">Where guests tap in the home, and whether each plaque is doing its job</p>
+        <div id="chip-alerts"></div>
         <div id="chip-list"></div>
       </section>
+
+      <section class="card">
+        <h2>What guests open</h2>
+        <p class="sub" id="links-sub">Links pressed on this house’s guest page</p>
+        <div id="link-list"></div>
+      </section>
+
+      <div data-defs></div>
     </div>
   </main>
 
   <script src="/js/beach.js"></script>
   <script src="/js/config.js"></script>
   <script src="/js/auth.js"></script>
+  <script src="/js/defs.js"></script>
   <script>
   (function () {
     if (!MTAuth.requireSignIn()) return;
@@ -274,27 +285,89 @@
       });
     }
 
-    /* ── Taps by chip: horizontal bars, value at the tip ── */
+    function ago(iso) {
+      if (!iso) return 'Never tapped';
+      var d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+      return d <= 0 ? 'Last tap today' : d === 1 ? 'Last tap yesterday' : 'Last tap ' + d + ' days ago';
+    }
+    var STATUS = {
+      ok: { cls: 'ok', text: '✓ Working' },
+      silent: { cls: 'warn', text: '⚠ Not being used' },
+      low: { cls: 'warn', text: '⚠ Low use' },
+      off: { cls: 'muted', text: 'Off' },
+      'new': { cls: 'muted', text: 'New' },
+    };
+
+    /* ── Plaques: horizontal bars (value at the tip) + status ── */
     function renderChips(data) {
       var list = $('chip-list');
       list.textContent = '';
+      var alerts = $('chip-alerts');
+      alerts.textContent = '';
       var chips = data.byChip.slice().sort(function (a, b) { return b.taps - a.taps; });
-      if (!chips.length) { list.appendChild(el('p', { class: 'sub' }, 'No chips set up for this property yet.')); return; }
+      if (!chips.length) { list.appendChild(el('p', { class: 'sub' }, 'No plaques set up for this house yet.')); return; }
+
+      var flagged = chips.filter(function (c) { return c.status === 'silent' || c.status === 'low'; });
+      flagged.forEach(function (c) {
+        var box = el('div', { class: 'demo-banner', role: 'note' });
+        box.appendChild(el('b', null, '⚠ ' + (c.spot || c.chip_id) + ':'));
+        box.appendChild(document.createTextNode(' ' + c.reason));
+        alerts.appendChild(box);
+      });
+
       var max = Math.max.apply(null, chips.map(function (c) { return c.taps; }).concat([1]));
       chips.forEach(function (c) {
         var row = el('div', { class: 'chip-row' });
         var name = el('div');
         name.appendChild(el('div', { class: 'chip-name' }, c.spot || c.chip_id));
-        name.appendChild(el('div', { class: 'chip-type' }, (TYPE_LABELS[c.link_type] || c.link_type) + (c.active === false ? ' · Off' : '')));
+        name.appendChild(el('div', { class: 'chip-type' }, (TYPE_LABELS[c.link_type] || c.link_type) + ' · ' + ago(c.lastTap)));
+        var st = STATUS[c.status] || STATUS.ok;
+        var pill = el('span', { class: 'pill ' + st.cls, title: c.reason || '' }, st.text);
+        pill.style.marginTop = '4px';
+        name.appendChild(pill);
         var track = el('div', { class: 'bar-track' });
         var bar = el('div', { class: 'bar' });
         bar.style.width = 'calc((100% - 40px) * ' + (c.taps / max) + ')';
+        if (c.status === 'off') bar.style.opacity = '0.35';
         track.appendChild(bar);
         track.appendChild(el('span', { class: 'bar-value' }, fmt(c.taps)));
         row.appendChild(name);
         row.appendChild(track);
         list.appendChild(row);
       });
+    }
+
+    /* ── What guests open: clicks per guest-page link ── */
+    function renderLinks(data) {
+      var list = $('link-list');
+      list.textContent = '';
+      var links = (data.links || []).filter(function (l) { return l.hasUrl; });
+      var infoOnly = (data.links || []).filter(function (l) { return !l.hasUrl; });
+      if (!links.length) { list.appendChild(el('p', { class: 'sub' }, 'No links on the guest page yet.')); return; }
+      var total = links.reduce(function (n, l) { return n + l.clicks; }, 0);
+      $('links-sub').textContent = total
+        ? fmt(total) + ' link press' + (total === 1 ? '' : 'es') + ' on this house’s guest page in the last ' + days + ' days'
+        : 'No link presses yet in the last ' + days + ' days';
+      var max = Math.max.apply(null, links.map(function (l) { return l.clicks; }).concat([1]));
+      links.slice().sort(function (a, b) { return b.clicks - a.clicks; }).forEach(function (l) {
+        var row = el('div', { class: 'chip-row' });
+        var name = el('div');
+        name.appendChild(el('div', { class: 'chip-name' }, l.label));
+        name.appendChild(el('div', { class: 'chip-type' }, (TYPE_LABELS[l.type] || l.type) + (l.placeholder ? ' · placeholder' : '')));
+        var track = el('div', { class: 'bar-track' });
+        var bar = el('div', { class: 'bar' });
+        bar.style.width = 'calc((100% - 40px) * ' + (l.clicks / max) + ')';
+        track.appendChild(bar);
+        track.appendChild(el('span', { class: 'bar-value' }, fmt(l.clicks)));
+        row.appendChild(name);
+        row.appendChild(track);
+        list.appendChild(row);
+      });
+      if (infoOnly.length) {
+        list.appendChild(el('p', { class: 'hint', style: 'margin-top:8px' },
+          infoOnly.map(function (l) { return l.label; }).join(', ') + ' ' + (infoOnly.length === 1 ? 'is' : 'are') +
+          ' shown right on the page (no link to press), so ' + (infoOnly.length === 1 ? 'it isn’t' : 'they aren’t') + ' counted here.'));
+      }
     }
 
     function render(data) {
@@ -313,6 +386,15 @@
       $('content').classList.remove('hidden');
       renderDayChart(data);
       renderChips(data);
+      renderLinks(data);
+      var demo = $('demo');
+      if (data.demoTaps > 0) {
+        demo.textContent = '';
+        demo.appendChild(el('b', null, 'Includes demo data.'));
+        demo.appendChild(document.createTextNode(' ' + fmt(data.demoTaps) + ' of the ' + fmt(data.totalTaps) +
+          ' taps in this period are demo taps that show how the dashboard works. Real numbers start when plaques are installed.'));
+        demo.classList.remove('hidden');
+      } else { demo.classList.add('hidden'); }
     }
 
     function load() {

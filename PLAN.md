@@ -100,6 +100,15 @@ Plain HTML/CSS/JavaScript. No paid services.
   turn on "reduce motion".
 - Chart colors were re-checked for color-blind safety and contrast on the new sand/ocean backgrounds.
 
+## Owner-meeting features
+- "How these numbers are counted" on every dashboard page (`js/defs.js`).
+- Overview ranks houses (#1 of N) and compares each with the portfolio average; sortable by alerts.
+- Plaque health on each house: Working / Not being used / Low use / New / Off, with last-tap date.
+  Rules live at the top of the Plaque health section in Code.gs (14-day window, quarter-of-median).
+- "What guests open": link presses per guest-page link.
+- Demo-data banner whenever demo taps are in the period.
+- Guest privacy page (`privacy.html`), linked from guest pages and sign-in. Not legal advice; have it reviewed.
+
 ## Rebooking metric
 - **Now:** a rebooking = a tap on a chip with `link_type = rebook`.
   Shown as the biggest number on every dashboard view, with a trend over time.

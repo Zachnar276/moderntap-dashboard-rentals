@@ -30,6 +30,7 @@
     <p id="status" class="status">Loading…</p>
 
     <div id="content" class="content hidden">
+      <div id="demo" class="demo-banner hidden" role="note"></div>
       <section class="card hero">
         <div class="label">Rebooking taps, all houses</div>
         <div class="value" id="rebook-value">–</div>
@@ -49,8 +50,9 @@
           <div class="delta" id="total-delta"></div>
         </section>
         <section class="card tile">
-          <div class="label">Houses</div>
-          <div class="value" id="house-count">–</div>
+          <div class="label">Average per house</div>
+          <div class="value" id="avg-value">–</div>
+          <div class="hint" id="avg-sub"></div>
         </section>
       </div>
 
@@ -61,17 +63,20 @@
             <option value="rebookTaps">Rebooking taps</option>
             <option value="rebookClicks">Potential rebooks</option>
             <option value="totalTaps">Total taps</option>
+            <option value="alerts">Plaque alerts</option>
             <option value="name">Name</option>
           </select>
         </label>
       </div>
       <div class="houses" id="houses"></div>
+      <div data-defs style="margin-top:16px"></div>
     </div>
   </main>
 
   <script src="/js/beach.js"></script>
   <script src="/js/config.js"></script>
   <script src="/js/auth.js"></script>
+  <script src="/js/defs.js"></script>
   <script>
   (function () {
     if (!MTAuth.requireSignIn()) return;
@@ -134,6 +139,7 @@
       var key = $('sort').value;
       var list = current.houses.slice().sort(function (a, b) {
         if (key === 'name') return String(a.name).localeCompare(String(b.name));
+        if (key === 'alerts') return (b.alerts || []).length - (a.alerts || []).length || String(a.name).localeCompare(String(b.name));
         return b[key] - a[key] || String(a.name).localeCompare(String(b.name));
       });
       var wrap = $('houses');
@@ -142,10 +148,19 @@
         wrap.appendChild(el('p', 'sub', 'No houses are linked to your account yet.'));
         return;
       }
+      // Rank by rebooking taps (ties share a rank) and compare with the portfolio average.
+      var ranked = current.houses.slice().sort(function (a, b) { return b.rebookTaps - a.rebookTaps; });
+      var avg = current.houses.length ? current.totals.rebookTaps / current.houses.length : 0;
       list.forEach(function (h) {
         var a = el('a', 'house');
         a.href = '/property.html?p=' + encodeURIComponent(h.id) + '&days=' + days;
-        a.appendChild(el('div', 'name', h.name));
+        var top = el('div', 'top');
+        top.appendChild(el('div', 'name', h.name));
+        if (current.houses.length > 1) {
+          var rank = 1 + ranked.filter(function (x) { return x.rebookTaps > h.rebookTaps; }).length;
+          top.appendChild(el('span', 'rank', '#' + rank + ' of ' + current.houses.length));
+        }
+        a.appendChild(top);
         a.appendChild(el('div', 'tag', h.tagline || ' '));
         var nums = el('div', 'nums');
         function num(value, label, lead, now, prev) {
@@ -159,12 +174,27 @@
         num(h.rebookClicks, 'Potential rebooks', false, h.rebookClicks, h.prevRebookClicks);
         num(h.totalTaps, 'Total taps', false);
         a.appendChild(nums);
+        if (current.houses.length > 1 && avg > 0) {
+          var diff = Math.round(((h.rebookTaps - avg) / avg) * 100);
+          var va = el('div', 'vsavg');
+          va.textContent = diff === 0 ? 'Right at your average for rebooking taps'
+            : (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff) + '% ' + (diff > 0 ? 'above' : 'below') + ' your average for rebooking taps';
+          a.appendChild(va);
+        }
+        if (h.alerts && h.alerts.length) {
+          var al = el('div', 'alerts');
+          h.alerts.forEach(function (x) {
+            al.appendChild(el('span', 'pill warn', '⚠ ' + x.spot + ': ' + (x.status === 'silent' ? 'not being used' : 'low use')));
+          });
+          a.appendChild(al);
+        }
         var sp = el('div', 'spark');
         sp.appendChild(sparkline(h.daily));
         sp.setAttribute('title', 'Daily taps, last ' + days + ' days');
         a.appendChild(sp);
         a.setAttribute('aria-label', h.name + ': ' + h.rebookTaps + ' rebooking taps, ' +
-          h.rebookClicks + ' potential rebooks, ' + h.totalTaps + ' total taps');
+          h.rebookClicks + ' potential rebooks, ' + h.totalTaps + ' total taps' +
+          (h.alerts && h.alerts.length ? ', ' + h.alerts.length + ' plaque alert' + (h.alerts.length === 1 ? '' : 's') : ''));
         wrap.appendChild(a);
       });
     }
@@ -190,7 +220,17 @@
       renderDelta($('clicks-delta'), t.rebookClicks, t.prevRebookClicks);
       $('total-value').textContent = fmt(t.totalTaps);
       renderDelta($('total-delta'), t.totalTaps, t.prevTotalTaps);
-      $('house-count').textContent = fmt(data.houses.length);
+      var avg = data.houses.length ? t.rebookTaps / data.houses.length : 0;
+      $('avg-value').textContent = avg >= 10 ? fmt(Math.round(avg)) : (Math.round(avg * 10) / 10).toString();
+      $('avg-sub').textContent = 'Rebooking taps per house, across ' + data.houses.length + ' house' + (data.houses.length === 1 ? '' : 's');
+      var demo = $('demo');
+      if (t.demoTaps > 0) {
+        demo.textContent = '';
+        demo.appendChild(el('b', null, 'Includes demo data.'));
+        demo.appendChild(document.createTextNode(' ' + fmt(t.demoTaps) + ' of the ' + fmt(t.totalTaps) +
+          ' taps in this period are demo taps that show how the dashboard works. Real numbers start when plaques are installed.'));
+        demo.classList.remove('hidden');
+      } else { demo.classList.add('hidden'); }
       $('status').classList.add('hidden');
       $('content').classList.remove('hidden');
       renderHouses();

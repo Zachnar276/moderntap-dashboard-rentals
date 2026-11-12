@@ -9,7 +9,7 @@
 
 const TABS = {
   Properties: ['property_id', 'name', 'address', 'active', 'tagline'],
-  Chips: ['chip_id', 'property_id', 'spot', 'link_type', 'active'],
+  Chips: ['chip_id', 'property_id', 'spot', 'link_type', 'active', 'added'],
   Links: ['property_id', 'link_type', 'label', 'url', 'details', 'placeholder', 'sort'],
   Taps: ['timestamp', 'chip_id', 'property_id', 'link_type', 'device'],
   Clicks: ['timestamp', 'property_id', 'link_type', 'chip_id', 'device'],
@@ -355,16 +355,23 @@ function summarize_(propertyIds, days) {
       totalTaps: 0, rebookTaps: 0, prevTotalTaps: 0, prevRebookTaps: 0,
       rebookClicks: 0, prevRebookClicks: 0,
       byType: byType, clicksByType: clicksByType, byDay: byDay, byChip: {},
+      lastTapByChip: {}, recentTaps: 0, demoTaps: 0,
     };
   });
 
+  const recentSince = now.getTime() - HEALTH_WINDOW_DAYS * 86400000;
   readTable_('Taps').forEach(function (t) {
     const s = byProperty[String(t.property_id)];
     if (!s || !(t.timestamp instanceof Date)) return;
+    const ms = t.timestamp.getTime();
+    const chipKey = String(t.chip_id).toLowerCase();
+    if (!s.lastTapByChip[chipKey] || ms > s.lastTapByChip[chipKey]) s.lastTapByChip[chipKey] = ms;
+    if (ms >= recentSince) s.recentTaps++;
     const day = dayKey(t.timestamp);
     const type = LINK_TYPES.indexOf(t.link_type) >= 0 ? t.link_type : 'other';
     if (period[day]) {
       s.totalTaps++;
+      if (t.device === 'test') s.demoTaps++;
       s.byType[type]++;
       s.byDay[day].taps++;
       if (type === 'rebook') { s.rebookTaps++; s.byDay[day].rebook++; }
@@ -391,6 +398,53 @@ function summarize_(propertyIds, days) {
   return { days: days, dayList: dayList, byProperty: byProperty };
 }
 
+/* ── Plaque health ──
+ * A plaque is flagged only when guests are clearly around (the house had taps recently), so an empty
+ * house in the off-season never raises false alarms.
+ *   off     plaque is turned off in Admin
+ *   silent  no taps for HEALTH_WINDOW_DAYS days while the house had at least HEALTH_MIN_HOUSE_TAPS taps
+ *           (possibly broken, covered, or removed)
+ *   low     far fewer taps this period than the house's typical plaque (under a quarter of the median)
+ *   new     added in the last HEALTH_WINDOW_DAYS days and not tapped yet (no alert)
+ *   ok      everything else
+ */
+const HEALTH_WINDOW_DAYS = 14;
+const HEALTH_MIN_HOUSE_TAPS = 5;
+const HEALTH_LOW_SHARE = 0.25;
+const HEALTH_LOW_MIN_MEDIAN = 4;
+
+function plaqueHealth_(chips, s) {
+  const now = Date.now();
+  const active = chips.filter(function (c) { return isTrue_(c.active); });
+  const counts = active.map(function (c) { return s.byChip[c.chip_id] || 0; }).sort(function (a, b) { return a - b; });
+  const median = counts.length ? counts[Math.floor((counts.length - 1) / 2)] : 0;
+  const guestsAround = s.recentTaps >= HEALTH_MIN_HOUSE_TAPS;
+
+  return chips.map(function (c) {
+    const taps = s.byChip[c.chip_id] || 0;
+    const last = s.lastTapByChip[String(c.chip_id).toLowerCase()] || null;
+    let status = 'ok';
+    let reason = '';
+    const added = c.added instanceof Date ? c.added.getTime() : 0;
+    const isNew = added && now - added < HEALTH_WINDOW_DAYS * 86400000 && !last;
+    if (!isTrue_(c.active)) {
+      status = 'off'; reason = 'Turned off in Admin.';
+    } else if (isNew) {
+      status = 'new'; reason = 'Added recently; checked after ' + HEALTH_WINDOW_DAYS + ' days.';
+    } else if (guestsAround && (!last || now - last > HEALTH_WINDOW_DAYS * 86400000)) {
+      status = 'silent';
+      reason = 'No taps in ' + HEALTH_WINDOW_DAYS + '+ days while other plaques here were used. Check that it is still in place and working.';
+    } else if (median >= HEALTH_LOW_MIN_MEDIAN && taps < median * HEALTH_LOW_SHARE) {
+      status = 'low';
+      reason = 'Used far less than this house’s other plaques. Consider moving it somewhere more visible.';
+    }
+    return {
+      chip_id: c.chip_id, spot: c.spot, link_type: c.link_type, active: isTrue_(c.active),
+      taps: taps, lastTap: last ? new Date(last).toISOString() : null, status: status, reason: reason,
+    };
+  });
+}
+
 function getStats_(pid, days) {
   const property = readTable_('Properties').filter(function (p) {
     return String(p.property_id) === pid;
@@ -410,11 +464,18 @@ function getStats_(pid, days) {
     prevRebookTaps: s.prevRebookTaps,
     rebookClicks: s.rebookClicks,
     prevRebookClicks: s.prevRebookClicks,
+    demoTaps: s.demoTaps,
     byType: s.byType,
     clicksByType: s.clicksByType,
-    byChip: chips.map(function (c) {
-      return { chip_id: c.chip_id, spot: c.spot, link_type: c.link_type, active: isTrue_(c.active), taps: s.byChip[c.chip_id] || 0 };
-    }),
+    byChip: plaqueHealth_(chips, s),
+    links: readTable_('Links')
+      .filter(function (l) { return String(l.property_id) === pid; })
+      .sort(function (a, b) { return (Number(a.sort) || 99) - (Number(b.sort) || 99); })
+      .map(function (l) {
+        return { type: l.link_type, label: l.label, hasUrl: /^https?:\/\//i.test(String(l.url || '')),
+                 placeholder: isTrue_(l.placeholder), clicks: s.clicksByType[l.link_type] || 0 };
+      }),
+    health: { windowDays: HEALTH_WINDOW_DAYS, minHouseTaps: HEALTH_MIN_HOUSE_TAPS },
     byDay: Object.keys(s.byDay).map(function (d) {
       return { date: d, taps: s.byDay[d].taps, rebook: s.byDay[d].rebook };
     }),
@@ -428,11 +489,13 @@ function getOverview_(user, days) {
   const ids = props.map(function (p) { return String(p.property_id); });
   const sum = summarize_(ids, days);
 
-  const totals = { totalTaps: 0, rebookTaps: 0, prevTotalTaps: 0, prevRebookTaps: 0, rebookClicks: 0, prevRebookClicks: 0 };
+  const allChips = readTable_('Chips');
+  const totals = { totalTaps: 0, rebookTaps: 0, prevTotalTaps: 0, prevRebookTaps: 0, rebookClicks: 0, prevRebookClicks: 0, demoTaps: 0 };
   const houses = props.map(function (p) {
     const id = String(p.property_id);
     const s = sum.byProperty[id];
     Object.keys(totals).forEach(function (k) { totals[k] += s[k]; });
+    const health = plaqueHealth_(allChips.filter(function (c) { return String(c.property_id) === id; }), s);
     return {
       id: id,
       name: p.name,
@@ -443,6 +506,9 @@ function getOverview_(user, days) {
       rebookClicks: s.rebookClicks,
       prevRebookClicks: s.prevRebookClicks,
       daily: sum.dayList.map(function (d) { return s.byDay[d].taps; }),
+      plaques: health.filter(function (h) { return h.active; }).length,
+      alerts: health.filter(function (h) { return h.status === 'silent' || h.status === 'low'; })
+        .map(function (h) { return { spot: h.spot || h.chip_id, status: h.status }; }),
     };
   });
 
@@ -581,6 +647,7 @@ function saveChip_(r) {
   if (existing && String(existing.property_id) !== pid) return fail_('That plaque ID is already used by another house.');
   return upsertRow_('Chips', function (c) { return String(c.chip_id).toLowerCase() === id; }, {
     chip_id: id, property_id: pid, spot: cleanText_(r.spot, 80), link_type: r.link_type, active: r.active !== false,
+    added: existing && existing.added ? existing.added : new Date(),
   });
 }
 
